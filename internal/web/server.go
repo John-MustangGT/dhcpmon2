@@ -2,13 +2,13 @@
 package web
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 	
 	"dhcpmon/internal/config"
 	"dhcpmon/internal/monitor"
@@ -173,43 +173,6 @@ func (s *Server) renderTemplate(name string, data interface{}) (string, error) {
 	return buf.String(), nil
 }
 
-// handleAPI handles existing API requests (leases, hosts, logs)
-func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, apiType string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	
-	var data interface{}
-	var err error
-	
-	switch apiType {
-	case "leases.json":
-		data = s.getDHCPLeasesJSON()
-	case "hosts.json":
-		data = s.getHostsJSON()
-	case "logs.json":
-		if s.cfg.SystemD {
-			data, err = s.monitor.GetLogs(), nil
-		} else {
-			data = s.monitor.GetLogs()
-		}
-	case "remove":
-		s.handleRemove(w, r)
-		return
-	default:
-		http.Error(w, "Unknown API endpoint", http.StatusNotFound)
-		return
-	}
-	
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	
-	response := map[string]interface{}{"data": data}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Failed to encode JSON response: %v", err)
-	}
-}
-
 // getDHCPLeasesJSON returns DHCP leases in JSON format
 func (s *Server) getDHCPLeasesJSON() []map[string]interface{} {
 	leases := s.monitor.GetDHCPLeases()
@@ -255,14 +218,5 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 	
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
-}
-
-// ipToInt converts an IP address to integer for sorting
-func (s *Server) ipToInt(ip net.IP) uint32 {
-	if len(ip) == 16 {
-		ip = ip[12:16]
-	}
-	
-	return uint32(ip[0])<<24 + uint32(ip[1])<<16 + uint32(ip[2])<<8 + uint32(ip[3])
 }
 

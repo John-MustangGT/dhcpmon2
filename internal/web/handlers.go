@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -105,7 +104,7 @@ func (s *Server) handleHostsAPI(w http.ResponseWriter, r *http.Request) {
 // handleLogsAPI handles logs API requests
 func (s *Server) handleLogsAPI(w http.ResponseWriter, r *http.Request) {
 	var logs interface{}
-	var err error
+	//var err error
 	
 	if s.cfg.SystemD {
 		// Get logs from systemd journal
