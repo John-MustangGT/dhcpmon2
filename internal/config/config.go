@@ -4,7 +4,6 @@ package config
 import (
 	"os"
 	"strconv"
-	"strings"
 	"log"
 	"gopkg.in/ini.v1"
 )

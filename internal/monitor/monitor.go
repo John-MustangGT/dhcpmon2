@@ -10,11 +10,11 @@ import (
 	
 	"github.com/fsnotify/fsnotify"
 	
-	"dhcpmon/internal/config"
-	"dhcpmon/internal/dhcp"
-	"dhcpmon/internal/hosts"
-	"dhcpmon/internal/logs"
-	"dhcpmon/pkg/models"
+	config "dhcpmon/internal/config"
+	dhcp "dhcpmon/internal/dhcp"
+	hosts "dhcpmon/internal/hosts"
+	logs "dhcpmon/internal/logs"
+	models "dhcpmon/pkg/models"
 )
 
 // Monitor handles file monitoring and data management
