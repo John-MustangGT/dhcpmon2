@@ -292,3 +292,8 @@ func (m *Monitor) watchFiles() {
 	}
 }
 
+
+// GetSystemdLogs returns logs from systemd journal
+func (m *Monitor) GetSystemdLogs() ([]models.LogEntry, error) {
+	return m.logManager.GetSystemdLogs()
+}

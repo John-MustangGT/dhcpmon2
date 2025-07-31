@@ -104,11 +104,10 @@ func (s *Server) handleHostsAPI(w http.ResponseWriter, r *http.Request) {
 // handleLogsAPI handles logs API requests
 func (s *Server) handleLogsAPI(w http.ResponseWriter, r *http.Request) {
 	var logs interface{}
-	//var err error
 	
 	if s.cfg.SystemD {
 		// Get logs from systemd journal
-		logEntries, sysErr := s.monitor.logManager.GetSystemdLogs()
+		logEntries, sysErr := s.monitor.GetSystemdLogs()
 		if sysErr != nil {
 			log.Printf("Failed to get systemd logs: %v", sysErr)
 			logs = []LogEntryJSON{}
