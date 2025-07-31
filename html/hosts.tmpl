@@ -1,0 +1,44 @@
+<script type="text/javascript" class="init">
+  $(function () {
+   $('[data-toggle="tooltip"]').tooltip()
+  })
+
+$(document).ready(function () {
+  var table = $('#Hosts').DataTable({
+      "scrollY":    "70vh",
+      "scrollCollapse": true,
+      "paging": false,
+      "ajax": {
+        "url": '?api=hosts.json',
+        "cache": true
+      },
+      "language": { "emptyTable": "No hosts file data"},
+      "columns": [
+       { "title": "IP Address", "data": ".ip" },
+       { "title": "Hostname", "data": ".name" },
+       { "title": "Alias", "data": ".alias",
+         "render": function (data, type, row) {
+            return data.join("<br>")}},
+       { "title": "", "data": null, 
+         "defaultContent": "<button type=\"button\" class=\"btn btn-outline-primary\">&#x1f5d1;</button>"}
+      ]
+    });
+//    table.row.add( {
+//      ".ip": "<input type=\"text\">",
+//      ".name": "<input type=\"text\">",
+//      ".alias": "<input type=\"text\">",
+//      "Remove": "<button type=\"button\">Add</button>"
+//     }).draw();
+
+  $('#Hosts tbody').on('click', 'button', function() {
+    var data = table.row($(this).parents('tr')).data();
+    $.ajax({ "url": "?api=remove", "type": "post", "data": data});
+    alert("Remove: "+JSON.stringify(data));
+  });
+});
+</script> 
+
+<table id="Hosts" class="table table-striped" style="width:90%">
+</table>
+
+<!-- vim: noai:ts=2:sw=2:set expandtab: -->

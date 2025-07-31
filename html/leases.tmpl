@@ -1,0 +1,88 @@
+<script type="text/javascript" class="init">
+  $(function () {
+   $('[data-toggle="tooltip"]').tooltip()
+  })
+
+$(document).ready(function () {
+  var table = $('#DHCPLeases').DataTable({
+      "pageLength": 50,
+      "scrollY":    "70vh",
+      "scrollCollapse": true,
+      "paging": false,
+      "ajax": {
+        "url": '?api=leases.json',
+        "cache": true
+      },
+      "columns": [ 
+        { "title": "IP Address", "data": ".ipSort",
+          "render": function (data, type, row) { 
+            return "<span>" + row.ip + 
+                "</span><br />".concat( "<span>",
+                {{if .EnableHTTPLinks}}
+                '<a href="http://' + row.ip + '" target="_blank">http</a> ',
+                {{end}}
+                {{if .EnableHTTPSLinks}}
+                '<a href="https://' + row.ip + '" target="_blank">https</a> ',
+                {{end}}
+                {{if .EnableSSHLinks}}
+                '<a href="ssh://' + row.ip + '" target="_blank">ssh</a> ',
+                {{end}}
+                "</span>"
+              )
+          }
+        },
+        { "title": "Name", 
+          "data": ".name",
+          "render": function (data, type, row) {
+            return "<div id=\"data\">"+ row.name + "</div>";
+          }
+        },
+        { "title": "MAC", "data": ".mac",
+          "render": function (data, type, row) { 
+            return '<span data-toggle="tooltip" title="' + row.Info.oui + '&#10;' + row.Info.companyName + '">' +
+              "<div id=\"data\">" + row.mac + 
+              '</div></span>'
+          }
+        },
+        {{if .EnableNetworkTags}}
+        { "title": "Network", "data": ".tag" },
+        {{end}}
+        { "title": "Expire", "data": ".delta", 
+          "render": function (data, type, row) { return row.expire + '<br>' + row.remain }
+        },
+        {{if .EnableEdit}}
+       { "title": "", "data": null, 
+         "defaultContent": 
+          "<button type=\"button\" class=\"btn btn-outline-success\" value=\"edit\">✎</button>" + 
+          "<button type=\"button\" class=\"btn btn-outline-danger\" value=\"remove\">✗</button>"
+        }
+        {{end}}
+      ]
+    });
+
+  $('#DHCPLeases tbody').on('click', 'button', function() {
+    var data = table.row($(this).parents('tr')).data();
+    var action = this.value;
+    if (action === "edit") {
+      $(this).parent().siblings('td').each(function(indx, val) {
+        var content = $(this).first().first().text();
+        if (content) {
+          $(this).html('<input value="' + content + '" />');
+        }
+      });
+    } else if (action === "remove") {
+      $.ajax({ "url": "?api="+action, 
+        "type": "post", 
+        "dataType": "html",
+          "data": {data: JSON.stringify(data)}});
+      alert(action + ": " + JSON.stringify(data));
+    }
+  });
+  //setInterval( function() {$('#DHCPLeases').DataTable().ajax.reload(); }, 5000);
+  });
+</script> 
+
+<table id="DHCPLeases" class="table table-striped" style="width:90%">
+</table>
+
+<!-- vim: noai:ts=2:sw=2:set expandtab: -->

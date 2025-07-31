@@ -1,0 +1,35 @@
+<script type="text/javascript" class="init">
+  $(function () {
+   $('[data-toggle="tooltip"]').tooltip()
+  })
+
+$(document).ready(function () {
+$('#Logs').DataTable({
+      "scrollY":    "70vh",
+      "scrollCollapse": true,
+      "paging": false,
+      "ajax": {
+        "url": '?api=logs.json',
+        "cache": true
+      },
+      "columns": [ 
+        { "title": "Timestamp", 
+          "data": ".utime",
+          "render": function (data, type, row) {
+            console.log(row.utime);
+            return new Date(row.utime).toISOString();
+          }
+        },
+        { "title": "Channel", "data": ".channel"},
+        { "title": "Message", "data": ".message"}
+      ]
+    });
+
+  //setInterval( function() {$('#DHCPLeases').DataTable().ajax.reload(); }, 5000);
+  });
+</script> 
+
+<table id="Logs" class="table table-striped" style="width:90%">
+</table>
+
+<!-- vim: noai:ts=2:sw=2:set expandtab: -->
