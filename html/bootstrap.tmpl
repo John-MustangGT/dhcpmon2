@@ -1,0 +1,95 @@
+<!-- ===== html/bootstrap.tmpl (Updated) ===== -->
+<!doctype html>
+<html lang="en" translate="no">
+  <head>
+    <title>{{.PageTitle}}</title>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome for icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    
+   <style>
+body {
+  min-height: 75rem;
+  padding-top: 4.5rem;
+}
+
+.mac-address {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.ip-address {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+#alerts-container {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  z-index: 1050;
+  width: 350px;
+}
+
+.table-responsive {
+  border-radius: 0.375rem;
+}
+
+.btn-group-sm > .btn {
+  margin-right: 2px;
+}
+
+.modal-lg {
+  max-width: 800px;
+}
+   </style>
+   <meta name="google" content="notranslate">
+  </head>
+  <body>
+    <main role="main" class="container-fluid">
+    <ul class="nav nav-tabs">
+      <li class="nav-item">
+        <a class="nav-link" href="?p=Leases">Leases</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="?p=Hosts">Hosts</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="?p=Static">Static DHCP</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="?p=Logs">Logs</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link disabled" href="?p=Config">Config</a>
+      </li>
+    </ul>
+      <div class="mt-4">
+    {{.PageBody}}
+      </div>
+    </main>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  </body>
+</html>
+
+<!-- vim: noai:ts=2:sw=2:set expandtab: -->
+

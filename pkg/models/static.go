@@ -1,4 +1,3 @@
-// ===== pkg/models/static.go =====
 package models
 
 import (
@@ -75,3 +74,81 @@ func (e *StaticDHCPEntry) Validate() error {
 	return nil
 }
 
+// ===== Example Usage Documentation =====
+
+/*
+API Usage Examples:
+
+1. Get all static entries:
+   GET /api/static
+
+2. Add a new entry:
+   POST /api/static
+   {
+     "action": "add",
+     "entry": {
+       "mac": "aa:bb:cc:dd:ee:ff",
+       "ip": "192.168.1.100",
+       "hostname": "my-device",
+       "tag": "trusted",
+       "comment": "My important device",
+       "enabled": true
+     }
+   }
+
+3. Update an existing entry:
+   POST /api/static
+   {
+     "action": "update",
+     "id": "entry_1234567890",
+     "entry": {
+       "mac": "aa:bb:cc:dd:ee:ff",
+       "ip": "192.168.1.101",
+       "hostname": "my-device-updated",
+       "enabled": true
+     }
+   }
+
+4. Delete an entry:
+   POST /api/static
+   {
+     "action": "delete",
+     "id": "entry_1234567890"
+   }
+
+5. Enable/disable an entry:
+   POST /api/static
+   {
+     "action": "enable",
+     "id": "entry_1234567890"
+   }
+
+6. Save configuration to file:
+   POST /api/static
+   {
+     "action": "save"
+   }
+
+7. Reload configuration from file:
+   POST /api/static
+   {
+     "action": "reload"
+   }
+
+8. Validate configuration:
+   POST /api/static
+   {
+     "action": "validate"
+   }
+
+9. Filter entries:
+   POST /api/static
+   {
+     "action": "list",
+     "filter": {
+       "enabled": "true",
+       "mac": "aa:bb",
+       "hostname": "device"
+     }
+   }
+*/

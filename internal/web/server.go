@@ -1,4 +1,4 @@
-// ===== internal/web/server.go =====
+// ===== internal/web/server.go (Updated) =====
 package web
 
 import (
@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 	
 	"dhcpmon/internal/config"
 	"dhcpmon/internal/monitor"
@@ -53,6 +54,37 @@ func (s *Server) Start() error {
 	return http.ListenAndServe(s.cfg.HTTPListen, s.mux)
 }
 
+// setupRoutes configures HTTP routes
+func (s *Server) setupRoutes() {
+	s.mux.HandleFunc("/", s.handleRoot)
+	s.mux.HandleFunc("/api/static", s.handleStaticAPI)
+}
+
+// handleRoot handles the main page requests
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	log.Printf("Request from %s: %s", r.RemoteAddr, r.URL.String())
+	
+	// Handle API requests
+	if apiType, exists := query["api"]; exists && len(apiType) > 0 {
+		switch apiType[0] {
+		case "static":
+			s.handleStaticAPI(w, r)
+		default:
+			s.handleAPI(w, r, apiType[0])
+		}
+		return
+	}
+	
+	// Handle page requests
+	pageType := "splash"
+	if p, exists := query["p"]; exists && len(p) > 0 {
+		pageType = p[0]
+	}
+	
+	s.handlePage(w, r, pageType)
+}
+
 // loadTemplates loads all template files
 func (s *Server) loadTemplates() {
 	templateFiles := map[string]string{
@@ -61,6 +93,7 @@ func (s *Server) loadTemplates() {
 		"logs":      "logs.tmpl",
 		"splash":    "splash.tmpl",
 		"hosts":     "hosts.tmpl",
+		"static":    "static.tmpl",
 	}
 	
 	for name, filename := range templateFiles {
@@ -74,68 +107,6 @@ func (s *Server) loadTemplates() {
 		
 		s.templates[name] = tmpl
 		log.Printf("Loaded template: %s", filename)
-	}
-}
-
-// setupRoutes configures HTTP routes
-func (s *Server) setupRoutes() {
-	s.mux.HandleFunc("/", s.handleRoot)
-}
-
-// handleRoot handles the main page requests
-func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	log.Printf("Request from %s: %s", r.RemoteAddr, r.URL.String())
-	
-	// Handle API requests
-	if apiType, exists := query["api"]; exists && len(apiType) > 0 {
-		s.handleAPI(w, r, apiType[0])
-		return
-	}
-	
-	// Handle page requests
-	pageType := "splash"
-	if p, exists := query["p"]; exists && len(p) > 0 {
-		pageType = p[0]
-	}
-	
-	s.handlePage(w, r, pageType)
-}
-
-// handleAPI handles API requests
-func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, apiType string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	
-	var data interface{}
-	var err error
-	
-	switch apiType {
-	case "leases.json":
-		data = s.getDHCPLeasesJSON()
-	case "hosts.json":
-		data = s.getHostsJSON()
-	case "logs.json":
-		if s.cfg.SystemD {
-			data, err = s.monitor.GetLogs(), nil
-		} else {
-			data = s.monitor.GetLogs()
-		}
-	case "remove":
-		s.handleRemove(w, r)
-		return
-	default:
-		http.Error(w, "Unknown API endpoint", http.StatusNotFound)
-		return
-	}
-	
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	
-	response := map[string]interface{}{"data": data}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Failed to encode JSON response: %v", err)
 	}
 }
 
@@ -162,6 +133,9 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request, pageType str
 	case "Hosts":
 		data.PageTitle = "DHCPmon - Hosts"
 		content, err = s.renderTemplate("hosts", data)
+	case "Static":
+		data.PageTitle = "DHCPmon - Static DHCP"
+		content, err = s.renderTemplate("static", data)
 	default:
 		data.PageTitle = "DHCPmon - Home"
 		content, err = s.renderTemplate("splash", nil)
@@ -197,6 +171,43 @@ func (s *Server) renderTemplate(name string, data interface{}) (string, error) {
 	}
 	
 	return buf.String(), nil
+}
+
+// handleAPI handles existing API requests (leases, hosts, logs)
+func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, apiType string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	
+	var data interface{}
+	var err error
+	
+	switch apiType {
+	case "leases.json":
+		data = s.getDHCPLeasesJSON()
+	case "hosts.json":
+		data = s.getHostsJSON()
+	case "logs.json":
+		if s.cfg.SystemD {
+			data, err = s.monitor.GetLogs(), nil
+		} else {
+			data = s.monitor.GetLogs()
+		}
+	case "remove":
+		s.handleRemove(w, r)
+		return
+	default:
+		http.Error(w, "Unknown API endpoint", http.StatusNotFound)
+		return
+	}
+	
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	response := map[string]interface{}{"data": data}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode JSON response: %v", err)
+	}
 }
 
 // getDHCPLeasesJSON returns DHCP leases in JSON format

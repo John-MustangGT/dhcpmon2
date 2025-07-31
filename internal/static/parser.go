@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"io"
 	"strings"
-	"unicode"
 	
 	"dhcpmon/pkg/models"
 )
@@ -113,7 +113,7 @@ func (p *Parser) parseLine(line string, lineNumber int) (*models.StaticDHCPEntry
 	}
 	
 	// Parse parameters
-	for i, param := range params {
+	for _, param := range params {
 		param = strings.TrimSpace(param)
 		
 		if param == "" {

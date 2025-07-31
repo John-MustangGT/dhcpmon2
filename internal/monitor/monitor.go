@@ -1,20 +1,22 @@
-// ===== internal/monitor/monitor.go =====
+// ===== internal/monitor/monitor.go (Updated) =====
 package monitor
 
 import (
 	"fmt"
 	"log"
 	"os"
+	"net"
 	"sync"
 	"time"
 	
 	"github.com/fsnotify/fsnotify"
 	
-	config "dhcpmon/internal/config"
-	dhcp "dhcpmon/internal/dhcp"
-	hosts "dhcpmon/internal/hosts"
-	logs "dhcpmon/internal/logs"
-	models "dhcpmon/pkg/models"
+	"dhcpmon/internal/config"
+	"dhcpmon/internal/dhcp"
+	"dhcpmon/internal/hosts"
+	"dhcpmon/internal/logs"
+	"dhcpmon/internal/static"
+	"dhcpmon/pkg/models"
 )
 
 // Monitor handles file monitoring and data management
@@ -23,12 +25,14 @@ type Monitor struct {
 	dhcpParser *dhcp.Parser
 	hostsParser *hosts.Parser
 	logManager *logs.Manager
+	staticManager *static.Manager
 	
 	dhcpLeases []models.DHCPLease
 	hostEntries []models.HostEntry
 	
 	watcher *fsnotify.Watcher
 	mu      sync.RWMutex
+	staticMu sync.RWMutex
 	stopCh  chan struct{}
 }
 
@@ -39,6 +43,7 @@ func New(cfg *config.Config, dhcpParser *dhcp.Parser) *Monitor {
 		dhcpParser:  dhcpParser,
 		hostsParser: hosts.NewParser(),
 		logManager:  logs.NewManager(cfg),
+		staticManager: static.NewManager(cfg.StaticFile),
 		stopCh:      make(chan struct{}),
 	}
 }
@@ -60,6 +65,11 @@ func (m *Monitor) Start() error {
 		log.Printf("Warning: failed to load host entries: %v", err)
 	}
 	
+	// Load static entries
+	if err := m.staticManager.Load(); err != nil {
+		log.Printf("Warning: failed to load static entries: %v", err)
+	}
+	
 	// Start file watching
 	go m.watchFiles()
 	
@@ -70,6 +80,13 @@ func (m *Monitor) Start() error {
 	
 	if err := m.watcher.Add(m.cfg.HostsFile); err != nil {
 		log.Printf("Warning: failed to watch hosts file: %v", err)
+	}
+	
+	// Watch static file if it exists
+	if m.cfg.StaticFile != "" {
+		if err := m.watcher.Add(m.cfg.StaticFile); err != nil {
+			log.Printf("Warning: failed to watch static file: %v", err)
+		}
 	}
 	
 	// Start log manager
@@ -121,6 +138,78 @@ func (m *Monitor) GetHostEntries() []models.HostEntry {
 // GetLogs returns current logs
 func (m *Monitor) GetLogs() []models.LogEntry {
 	return m.logManager.GetLogs()
+}
+
+// ===== Static DHCP Management Methods =====
+
+// GetStaticEntries returns all static DHCP entries
+func (m *Monitor) GetStaticEntries() []models.StaticDHCPEntry {
+	return m.staticManager.GetAll()
+}
+
+// GetStaticEntryByID returns a static DHCP entry by ID
+func (m *Monitor) GetStaticEntryByID(id string) (*models.StaticDHCPEntry, error) {
+	return m.staticManager.GetByID(id)
+}
+
+// AddStaticEntry adds a new static DHCP entry
+func (m *Monitor) AddStaticEntry(entry models.StaticDHCPEntry) error {
+	return m.staticManager.Add(entry)
+}
+
+// UpdateStaticEntry updates an existing static DHCP entry
+func (m *Monitor) UpdateStaticEntry(id string, entry models.StaticDHCPEntry) error {
+	return m.staticManager.Update(id, entry)
+}
+
+// DeleteStaticEntry deletes a static DHCP entry
+func (m *Monitor) DeleteStaticEntry(id string) error {
+	return m.staticManager.Delete(id)
+}
+
+// EnableStaticEntry enables a static DHCP entry
+func (m *Monitor) EnableStaticEntry(id string) error {
+	return m.staticManager.Enable(id)
+}
+
+// DisableStaticEntry disables a static DHCP entry
+func (m *Monitor) DisableStaticEntry(id string) error {
+	return m.staticManager.Disable(id)
+}
+
+// SaveStaticEntries saves static DHCP entries to file
+func (m *Monitor) SaveStaticEntries() error {
+	return m.staticManager.Save()
+}
+
+// ReloadStaticEntries reloads static DHCP entries from file
+func (m *Monitor) ReloadStaticEntries() error {
+	return m.staticManager.Load()
+}
+
+// ValidateStaticEntries validates all static DHCP entries
+func (m *Monitor) ValidateStaticEntries() []error {
+	return m.staticManager.Validate()
+}
+
+// GetStaticEntriesByMAC returns static entries for a MAC address
+func (m *Monitor) GetStaticEntriesByMAC(mac string) ([]models.StaticDHCPEntry, error) {
+	parsedMAC, err := net.ParseMAC(mac)
+	if err != nil {
+		return nil, fmt.Errorf("invalid MAC address: %w", err)
+	}
+	
+	return m.staticManager.GetByMAC(parsedMAC), nil
+}
+
+// GetStaticEntriesByIP returns static entries for an IP address
+func (m *Monitor) GetStaticEntriesByIP(ip string) ([]models.StaticDHCPEntry, error) {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return nil, fmt.Errorf("invalid IP address: %s", ip)
+	}
+	
+	return m.staticManager.GetByIP(parsedIP), nil
 }
 
 // loadDHCPLeases loads DHCP leases from file
@@ -183,6 +272,10 @@ func (m *Monitor) watchFiles() {
 				case m.cfg.HostsFile:
 					if err := m.loadHostEntries(); err != nil {
 						log.Printf("Error reloading host entries: %v", err)
+					}
+				case m.cfg.StaticFile:
+					if err := m.staticManager.Load(); err != nil {
+						log.Printf("Error reloading static entries: %v", err)
 					}
 				}
 			}
