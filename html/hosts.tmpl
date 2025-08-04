@@ -18,7 +18,8 @@ $(document).ready(function () {
        { "title": "Hostname", "data": ".name" },
        { "title": "Alias", "data": ".alias",
          "render": function (data, type, row) {
-            return data.join("<br>")}},
+	    if (data != null) return data.join("<br>")
+	    return "<br>";}},
        { "title": "", "data": null, 
          "defaultContent": "<button type=\"button\" class=\"btn btn-outline-primary\">&#x1f5d1;</button>"}
       ]
