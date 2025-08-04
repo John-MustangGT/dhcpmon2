@@ -1,6 +1,8 @@
+// ===== pkg/models/static.go (Updated with proper MAC formatting) =====
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -20,6 +22,69 @@ type StaticDHCPEntry struct {
 	RawLine     string           `json:"rawLine"`     // Original raw line
 }
 
+// MarshalJSON customizes JSON marshaling to format MAC address properly
+func (e StaticDHCPEntry) MarshalJSON() ([]byte, error) {
+	type Alias StaticDHCPEntry
+	
+	return json.Marshal(&struct {
+		MAC string `json:"mac"`
+		IP  string `json:"ip,omitempty"`
+		*Alias
+	}{
+		MAC:   e.GetFormattedMAC(),
+		IP:    e.GetFormattedIP(),
+		Alias: (*Alias)(&e),
+	})
+}
+
+// GetFormattedMAC returns MAC address in standard AA:BB:CC:DD:EE:FF format
+func (e *StaticDHCPEntry) GetFormattedMAC() string {
+	if e.MAC == nil {
+		return ""
+	}
+	// Convert to uppercase and ensure colon format
+	return strings.ToUpper(e.MAC.String())
+}
+
+// GetFormattedIP returns IP address as string, or empty if nil
+func (e *StaticDHCPEntry) GetFormattedIP() string {
+	if e.IP == nil {
+		return ""
+	}
+	return e.IP.String()
+}
+
+// SetMAC parses and sets the MAC address from string, normalizing format
+func (e *StaticDHCPEntry) SetMAC(macStr string) error {
+	if macStr == "" {
+		return fmt.Errorf("MAC address cannot be empty")
+	}
+	
+	mac, err := net.ParseMAC(macStr)
+	if err != nil {
+		return fmt.Errorf("invalid MAC address format: %w", err)
+	}
+	
+	e.MAC = mac
+	return nil
+}
+
+// SetIP parses and sets the IP address from string
+func (e *StaticDHCPEntry) SetIP(ipStr string) error {
+	if ipStr == "" {
+		e.IP = nil
+		return nil
+	}
+	
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return fmt.Errorf("invalid IP address format: %s", ipStr)
+	}
+	
+	e.IP = ip
+	return nil
+}
+
 // ToDnsmasqLine converts the entry back to dnsmasq configuration format
 func (e *StaticDHCPEntry) ToDnsmasqLine() string {
 	if !e.Enabled {
@@ -28,9 +93,9 @@ func (e *StaticDHCPEntry) ToDnsmasqLine() string {
 
 	parts := []string{}
 	
-	// MAC address is required
+	// MAC address is required (formatted as AA:BB:CC:DD:EE:FF)
 	if e.MAC != nil {
-		parts = append(parts, e.MAC.String())
+		parts = append(parts, e.GetFormattedMAC())
 	}
 	
 	// Add tag if specified
@@ -63,14 +128,170 @@ func (e *StaticDHCPEntry) ToDnsmasqLine() string {
 	return line
 }
 
-// Validate checks if the entry has required fields
+// Validate checks if the entry has required fields and valid formats
 func (e *StaticDHCPEntry) Validate() error {
 	if e.MAC == nil {
 		return fmt.Errorf("MAC address is required")
 	}
+	
+	// Validate MAC address format (should be 6 bytes)
+	if len(e.MAC) != 6 {
+		return fmt.Errorf("invalid MAC address length")
+	}
+	
 	if e.IP == nil && e.Hostname == "" {
 		return fmt.Errorf("either IP address or hostname is required")
 	}
+	
+	// Validate IP address if provided
+	if e.IP != nil {
+		// Check if it's IPv4
+		if e.IP.To4() == nil {
+			return fmt.Errorf("only IPv4 addresses are supported")
+		}
+	}
+	
+	// Validate hostname format if provided
+	if e.Hostname != "" {
+		if len(e.Hostname) > 253 {
+			return fmt.Errorf("hostname too long (max 253 characters)")
+		}
+		
+		// Basic hostname validation (no spaces, special characters)
+		for _, char := range e.Hostname {
+			if !((char >= 'a' && char <= 'z') || 
+				 (char >= 'A' && char <= 'Z') || 
+				 (char >= '0' && char <= '9') || 
+				 char == '-' || char == '.') {
+				return fmt.Errorf("hostname contains invalid characters")
+			}
+		}
+	}
+	
+	return nil
+}
+
+// Clone creates a deep copy of the static DHCP entry
+func (e *StaticDHCPEntry) Clone() *StaticDHCPEntry {
+	clone := &StaticDHCPEntry{
+		ID:         e.ID,
+		Hostname:   e.Hostname,
+		Tag:        e.Tag,
+		LeaseTime:  e.LeaseTime,
+		Comment:    e.Comment,
+		Enabled:    e.Enabled,
+		LineNumber: e.LineNumber,
+		RawLine:    e.RawLine,
+	}
+	
+	// Deep copy MAC address
+	if e.MAC != nil {
+		clone.MAC = make(net.HardwareAddr, len(e.MAC))
+		copy(clone.MAC, e.MAC)
+	}
+	
+	// Deep copy IP address
+	if e.IP != nil {
+		clone.IP = make(net.IP, len(e.IP))
+		copy(clone.IP, e.IP)
+	}
+	
+	return clone
+}
+
+// Equal compares two StaticDHCPEntry instances for equality
+func (e *StaticDHCPEntry) Equal(other *StaticDHCPEntry) bool {
+	if other == nil {
+		return false
+	}
+	
+	return e.ID == other.ID &&
+		e.GetFormattedMAC() == other.GetFormattedMAC() &&
+		e.GetFormattedIP() == other.GetFormattedIP() &&
+		e.Hostname == other.Hostname &&
+		e.Tag == other.Tag &&
+		e.LeaseTime == other.LeaseTime &&
+		e.Comment == other.Comment &&
+		e.Enabled == other.Enabled
+}
+
+// String returns a string representation of the entry
+func (e *StaticDHCPEntry) String() string {
+	status := "enabled"
+	if !e.Enabled {
+		status = "disabled"
+	}
+	
+	return fmt.Sprintf("StaticDHCPEntry{MAC: %s, IP: %s, Hostname: %s, Status: %s}",
+		e.GetFormattedMAC(),
+		e.GetFormattedIP(),
+		e.Hostname,
+		status)
+}
+
+// IsValid performs a quick validation check
+func (e *StaticDHCPEntry) IsValid() bool {
+	return e.Validate() == nil
+}
+
+// GetDisplayName returns a user-friendly display name for the entry
+func (e *StaticDHCPEntry) GetDisplayName() string {
+	if e.Hostname != "" {
+		return e.Hostname
+	}
+	if e.IP != nil {
+		return e.IP.String()
+	}
+	return e.GetFormattedMAC()
+}
+
+// ===== Helper Functions =====
+
+// NormalizeMACAddress converts MAC address to standard format
+func NormalizeMACAddress(macStr string) (string, error) {
+	if macStr == "" {
+		return "", fmt.Errorf("MAC address cannot be empty")
+	}
+	
+	mac, err := net.ParseMAC(macStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid MAC address format: %w", err)
+	}
+	
+	// Return in uppercase with colons format
+	return strings.ToUpper(mac.String()), nil
+}
+
+// ValidateMACAddress checks if a MAC address string is valid
+func ValidateMACAddress(macStr string) error {
+	if macStr == "" {
+		return fmt.Errorf("MAC address cannot be empty")
+	}
+	
+	_, err := net.ParseMAC(macStr)
+	if err != nil {
+		return fmt.Errorf("invalid MAC address format: %w", err)
+	}
+	
+	return nil
+}
+
+// ValidateIPAddress checks if an IP address string is valid IPv4
+func ValidateIPAddress(ipStr string) error {
+	if ipStr == "" {
+		return nil // IP is optional
+	}
+	
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return fmt.Errorf("invalid IP address format: %s", ipStr)
+	}
+	
+	// Check if it's IPv4
+	if ip.To4() == nil {
+		return fmt.Errorf("only IPv4 addresses are supported")
+	}
+	
 	return nil
 }
 
@@ -87,7 +308,7 @@ API Usage Examples:
    {
      "action": "add",
      "entry": {
-       "mac": "aa:bb:cc:dd:ee:ff",
+       "mac": "AA:BB:CC:DD:EE:FF",
        "ip": "192.168.1.100",
        "hostname": "my-device",
        "tag": "trusted",
@@ -102,7 +323,7 @@ API Usage Examples:
      "action": "update",
      "id": "entry_1234567890",
      "entry": {
-       "mac": "aa:bb:cc:dd:ee:ff",
+       "mac": "AA:BB:CC:DD:EE:FF",
        "ip": "192.168.1.101",
        "hostname": "my-device-updated",
        "enabled": true
@@ -147,8 +368,14 @@ API Usage Examples:
      "action": "list",
      "filter": {
        "enabled": "true",
-       "mac": "aa:bb",
+       "mac": "AA:BB",
        "hostname": "device"
      }
    }
+
+MAC Address Format:
+- Input: Accepts AA:BB:CC:DD:EE:FF, AA-BB-CC-DD-EE-FF, or AABBCCDDEEFF
+- Output: Always normalized to AA:BB:CC:DD:EE:FF (uppercase with colons)
+- Storage: Stored as net.HardwareAddr for consistency
+- Display: Always shown in standard format
 */

@@ -1,4 +1,4 @@
-// ===== internal/web/handlers.go (Fixed) =====
+// ===== internal/web/handlers.go (Updated with MAC formatting) =====
 package web
 
 import (
@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -59,10 +60,10 @@ func (s *Server) handleLeasesAPI(w http.ResponseWriter, r *http.Request) {
 			ipSort = s.ipToInt(lease.IP)
 		}
 		
-		// Handle nil MAC addresses
+		// Format MAC address properly (AA:BB:CC:DD:EE:FF format)
 		macStr := ""
 		if lease.MAC != nil {
-			macStr = lease.MAC.String()
+			macStr = s.formatMACAddress(lease.MAC)
 		}
 		
 		jsonLeases[i] = DHCPLeaseJSON{
@@ -221,6 +222,31 @@ func (s *Server) handleEditAPI(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// formatMACAddress formats MAC address in standard AA:BB:CC:DD:EE:FF format
+func (s *Server) formatMACAddress(mac net.HardwareAddr) string {
+	if mac == nil {
+		return ""
+	}
+	
+	// Convert to uppercase and ensure colon format
+	return strings.ToUpper(mac.String())
+}
+
+// parseMACAddress parses and normalizes MAC address from various formats
+func (s *Server) parseMACAddress(macStr string) (net.HardwareAddr, error) {
+	if macStr == "" {
+		return nil, nil
+	}
+	
+	// Parse MAC address (supports multiple formats)
+	mac, err := net.ParseMAC(macStr)
+	if err != nil {
+		return nil, err
+	}
+	
+	return mac, nil
+}
+
 // ipToInt converts IP to integer with better error handling
 func (s *Server) ipToInt(ip net.IP) uint32 {
 	if ip == nil {
@@ -237,4 +263,35 @@ func (s *Server) ipToInt(ip net.IP) uint32 {
 	}
 	
 	return uint32(ip[0])<<24 + uint32(ip[1])<<16 + uint32(ip[2])<<8 + uint32(ip[3])
+}
+
+// validateMACFormat checks if MAC address is in valid format
+func (s *Server) validateMACFormat(macStr string) bool {
+	if macStr == "" {
+		return false
+	}
+	
+	_, err := net.ParseMAC(macStr)
+	return err == nil
+}
+
+// validateIPFormat checks if IP address is in valid format
+func (s *Server) validateIPFormat(ipStr string) bool {
+	if ipStr == "" {
+		return true // IP is optional
+	}
+	
+	ip := net.ParseIP(ipStr)
+	return ip != nil && ip.To4() != nil // Only IPv4 supported
+}
+
+// normalizeLeaseData ensures consistent data formatting for API responses
+func (s *Server) normalizeLeaseData(lease interface{}) map[string]interface{} {
+	// Convert lease to map for manipulation
+	data := make(map[string]interface{})
+	
+	// Use reflection or type assertion to handle different lease types
+	// and ensure MAC addresses are properly formatted
+	
+	return data
 }

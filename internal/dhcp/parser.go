@@ -1,4 +1,4 @@
-// ===== internal/dhcp/parser.go =====
+// ===== internal/dhcp/parser.go (Updated with proper MAC formatting) =====
 package dhcp
 
 import (
@@ -73,10 +73,12 @@ func (p *Parser) parseLeaseLine(fields []string) (models.DHCPLease, error) {
 		lease.Remain = time.Until(lease.Expire)
 	}
 	
-	// Parse MAC address
+	// Parse MAC address and normalize format
 	if mac, err := net.ParseMAC(fields[1]); err == nil {
 		lease.MAC = mac
-		lease.Info = p.macDB.Lookup(fields[1])
+		// Format MAC address as AA:BB:CC:DD:EE:FF (uppercase with colons)
+		macStr := strings.ToUpper(mac.String())
+		lease.Info = p.macDB.Lookup(macStr)
 	}
 	
 	// Parse IP address
@@ -138,14 +140,16 @@ func (p *Parser) parseStaticLine(line string) (models.DHCPLease, error) {
 		return lease, fmt.Errorf("insufficient values")
 	}
 	
-	// Parse MAC address (first field)
+	// Parse MAC address (first field) and normalize format
 	mac, err := net.ParseMAC(values[0])
 	if err != nil {
 		return lease, fmt.Errorf("invalid MAC address: %w", err)
 	}
 	
 	lease.MAC = mac
-	lease.Info = p.macDB.Lookup(values[0])
+	// Format MAC address as AA:BB:CC:DD:EE:FF (uppercase with colons)
+	macStr := strings.ToUpper(mac.String())
+	lease.Info = p.macDB.Lookup(macStr)
 	lease.Static = true
 	
 	// Parse remaining fields
@@ -179,3 +183,11 @@ func (p *Parser) parseStaticLine(line string) (models.DHCPLease, error) {
 	return lease, nil
 }
 
+// NormalizeMACAddress ensures MAC addresses are consistently formatted
+func (p *Parser) NormalizeMACAddress(macStr string) string {
+	if mac, err := net.ParseMAC(macStr); err == nil {
+		// Return uppercase MAC with colons (AA:BB:CC:DD:EE:FF format)
+		return strings.ToUpper(mac.String())
+	}
+	return macStr
+}

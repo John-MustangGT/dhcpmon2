@@ -1,87 +1,632 @@
-<script type="text/javascript" class="init">
-  $(function () {
-   $('[data-toggle="tooltip"]').tooltip()
-  })
-
-$(document).ready(function () {
-  var table = $('#DHCPLeases').DataTable({
-      "pageLength": 50,
-      "scrollY":    "70vh",
-      "scrollCollapse": true,
-      "paging": false,
-      "ajax": {
-        "url": '?api=leases.json',
-        "cache": true
-      },
-      "columns": [ 
-        { "title": "IP Address", "data": ".ipSort",
-          "render": function (data, type, row) { 
-            return "<span>" + row.ip + 
-                "</span><br />".concat( "<span>",
-                {{if .EnableHTTPLinks}}
-                '<a href="http://' + row.ip + '" target="_blank">http</a> ',
-                {{end}}
-                {{if .EnableHTTPSLinks}}
-                '<a href="https://' + row.ip + '" target="_blank">https</a> ',
-                {{end}}
-                {{if .EnableSSHLinks}}
-                '<a href="ssh://' + row.ip + '" target="_blank">ssh</a> ',
-                {{end}}
-                "</span>"
-              )
-          }
-        },
-        { "title": "Name", 
-          "data": ".name",
-          "render": function (data, type, row) {
-            return "<div id=\"data\">"+ row.name + "</div>";
-          }
-        },
-        { "title": "MAC", "data": ".mac",
-          "render": function (data, type, row) { 
-            return '<span data-toggle="tooltip" title="' + row.Info.oui + '&#10;' + row.Info.companyName + '">' +
-              "<div id=\"data\">" + row.mac + 
-              '</div></span>'
-          }
-        },
-        {{if .EnableNetworkTags}}
-        { "title": "Network", "data": ".tag" },
-        {{end}}
-        { "title": "Expire", "data": ".delta", 
-          "render": function (data, type, row) { return row.expire + '<br>' + row.remain }
-        },
+<!-- ===== html/leases.tmpl (Updated with Static Integration) ===== -->
+<div class="card">
+  <div class="card-header">
+    <div class="row align-items-center">
+      <div class="col">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-network-wired me-2"></i>
+          DHCP Leases & Static Reservations
+        </h5>
+      </div>
+      <div class="col-auto">
         {{if .EnableEdit}}
-       { "title": "", "data": null, 
-         "defaultContent": 
-          "<button type=\"button\" class=\"btn btn-outline-success\" value=\"edit\">✎</button>" + 
-          "<button type=\"button\" class=\"btn btn-outline-danger\" value=\"remove\">✗</button>"
-        }
+        <button class="btn btn-success btn-sm" id="add-static-btn">
+          <i class="fas fa-plus me-1"></i>Add Static Entry
+        </button>
+        <button class="btn btn-primary btn-sm ms-2" id="save-config-btn">
+          <i class="fas fa-save me-1"></i>Save Config
+        </button>
         {{end}}
-      ]
+        <button class="btn btn-outline-primary btn-sm ms-2" id="refresh-btn">
+          <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    <!-- Filter Controls -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <div class="form-group">
+          <label class="form-label">Filter by Type:</label>
+          <select class="form-select" id="lease-type-filter">
+            <option value="">All Leases</option>
+            <option value="dynamic">Dynamic Only</option>
+            <option value="static">Static Only</option>
+          </select>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="form-group">
+          <label class="form-label">Filter by Status:</label>
+          <select class="form-select" id="lease-status-filter">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+      </div>
+      {{if .EnableNetworkTags}}
+      <div class="col-md-4">
+        <div class="form-group">
+          <label class="form-label">Filter by Network:</label>
+          <select class="form-select" id="network-filter">
+            <option value="">All Networks</option>
+          </select>
+        </div>
+      </div>
+      {{end}}
+    </div>
+
+    <div class="table-responsive">
+      <table id="LeasesTable" class="table table-hover" style="width:100%">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>IP Address</th>
+            <th>MAC Address</th>
+            <th>Hostname</th>
+            <th>Vendor</th>
+            {{if .EnableNetworkTags}}
+            <th>Network</th>
+            {{end}}
+            <th>Lease Info</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+      </table>
+    </div>
+  </div>
+</div>
+
+{{if .EnableEdit}}
+<!-- Add/Edit Static Entry Modal -->
+<div class="modal fade" id="staticModal" tabindex="-1" aria-labelledby="staticModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticModalLabel">Add Static DHCP Entry</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="staticForm">
+          <input type="hidden" id="entry-id">
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="entry-mac" class="form-label">MAC Address *</label>
+                <input type="text" class="form-control" id="entry-mac" 
+                       placeholder="AA:BB:CC:DD:EE:FF" required
+                       pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$">
+                <div class="form-text">Format: AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF</div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="entry-ip" class="form-label">IP Address</label>
+                <input type="text" class="form-control" id="entry-ip" 
+                       placeholder="192.168.1.100"
+                       pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$">
+                <div class="form-text">Leave empty for hostname-only reservation</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="entry-hostname" class="form-label">Hostname</label>
+                <input type="text" class="form-control" id="entry-hostname" 
+                       placeholder="device-name">
+                <div class="form-text">Optional hostname for the device</div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="entry-tag" class="form-label">Network Tag</label>
+                <input type="text" class="form-control" id="entry-tag" 
+                       placeholder="trusted">
+                <div class="form-text">Optional network tag for classification</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="entry-lease-time" class="form-label">Lease Time</label>
+                <input type="text" class="form-control" id="entry-lease-time" 
+                       placeholder="infinite">
+                <div class="form-text">e.g., 12h, 1d, infinite (leave empty for default)</div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="entry-comment" class="form-label">Comment</label>
+                <input type="text" class="form-control" id="entry-comment" 
+                       placeholder="Optional comment">
+                <div class="form-text">Description or notes about this entry</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" id="entry-enabled" checked>
+              <label class="form-check-label" for="entry-enabled">
+                Enable this entry
+              </label>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveStaticEntry()">Save Entry</button>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}
+
+<script type="text/javascript">
+  let leasesTable;
+  let staticEntries = [];
+  
+  $(document).ready(function() {
+    // Initialize DataTable
+    leasesTable = $('#LeasesTable').DataTable({
+      responsive: true,
+      pageLength: 50,
+      order: [[1, 'asc']], // Order by IP address
+      columnDefs: [
+        { orderable: false, targets: [0, -1] }, // Status and Actions columns not orderable
+        { searchable: false, targets: [0, -1] }
+      ],
+      language: {
+        emptyTable: "No DHCP leases found"
+      }
     });
 
-  $('#DHCPLeases tbody').on('click', 'button', function() {
-    var data = table.row($(this).parents('tr')).data();
-    var action = this.value;
-    if (action === "edit") {
-      $(this).parent().siblings('td').each(function(indx, val) {
-        var content = $(this).first().first().text();
-        if (content) {
-          $(this).html('<input value="' + content + '" />');
+    // Set up event handlers
+    setupEventHandlers();
+    
+    // Load initial data
+    refreshData();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(refreshData, 30000);
+  });
+
+  function setupEventHandlers() {
+    {{if .EnableEdit}}
+    // Add static entry button
+    $('#add-static-btn').click(function() {
+      showStaticModal();
+    });
+
+    // Save configuration button
+    $('#save-config-btn').click(function() {
+      saveConfiguration();
+    });
+    {{end}}
+
+    // Refresh button
+    $('#refresh-btn').click(function() {
+      refreshData();
+      showAlert('info', 'Data refreshed');
+    });
+
+    // Filter handlers
+    $('#lease-type-filter, #lease-status-filter, #network-filter').change(function() {
+      applyFilters();
+    });
+  }
+
+  function refreshData() {
+    // Load DHCP leases
+    $.ajax({
+      url: '?api=leases.json',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        updateLeasesTable(response.data || []);
+      },
+      error: function() {
+        showAlert('danger', 'Failed to load DHCP leases data');
+      }
+    });
+
+    {{if .EnableEdit}}
+    // Load static entries
+    $.ajax({
+      url: '/api/static',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        if (response.success) {
+          staticEntries = response.data || [];
+          // Static entries are merged with leases data in the backend
         }
-      });
-    } else if (action === "remove") {
-      $.ajax({ "url": "?api="+action, 
-        "type": "post", 
-        "dataType": "html",
-          "data": {data: JSON.stringify(data)}});
-      alert(action + ": " + JSON.stringify(data));
+      },
+      error: function() {
+        console.log('No static entries available or API not accessible');
+      }
+    });
+    {{end}}
+  }
+
+  function updateLeasesTable(leases) {
+    leasesTable.clear();
+    
+    // Populate network filter dropdown
+    {{if .EnableNetworkTags}}
+    const networks = [...new Set(leases.map(l => l.tag).filter(t => t))];
+    const networkFilter = $('#network-filter');
+    const currentNetwork = networkFilter.val();
+    networkFilter.find('option:not(:first)').remove();
+    networks.forEach(network => {
+      networkFilter.append(`<option value="${network}">${network}</option>`);
+    });
+    networkFilter.val(currentNetwork);
+    {{end}}
+    
+    leases.forEach(function(lease) {
+      const row = createLeaseRow(lease);
+      leasesTable.row.add(row);
+    });
+    
+    leasesTable.draw();
+    applyFilters();
+  }
+
+  function createLeaseRow(lease) {
+    // Status indicator
+    const statusIcon = lease.static ? 
+      '<span class="status-indicator status-static"></span><span class="badge bg-secondary">Static</span>' :
+      '<span class="status-indicator status-online"></span><span class="badge bg-success">Dynamic</span>';
+    
+    // Format MAC address properly
+    const macFormatted = formatMacAddress(lease.mac);
+    
+    // IP address with links
+    const ipInfo = lease.ip ? 
+      `<div class="lease-info">
+        <span class="ip-address">${lease.ip}</span>
+        ${createLeaseLinks(lease.ip)}
+      </div>` : '<span class="text-muted">-</span>';
+    
+    // Vendor information
+    const vendorInfo = lease.info && lease.info.companyName ? 
+      `<div>
+        <div><strong>${lease.info.companyName}</strong></div>
+        <div class="vendor-info">${lease.info.oui || ''}</div>
+      </div>` : '<span class="text-muted">Unknown</span>';
+    
+    // Network tag
+    {{if .EnableNetworkTags}}
+    const networkTag = lease.tag ? 
+      `<span class="badge bg-info">${lease.tag}</span>` : 
+      '<span class="text-muted">-</span>';
+    {{end}}
+    
+    // Lease information
+    const leaseInfo = lease.static ? 
+      '<span class="badge bg-success">Permanent</span>' :
+      createDynamicLeaseInfo(lease);
+    
+    // Actions
+    const actions = createActionButtons(lease);
+    
+    const row = [
+      statusIcon,
+      ipInfo,
+      macFormatted,
+      lease.name || '<span class="text-muted">-</span>',
+      vendorInfo,
+      {{if .EnableNetworkTags}}
+      networkTag,
+      {{end}}
+      leaseInfo,
+      actions
+    ];
+
+    return row;
+  }
+
+  function createLeaseLinks(ip) {
+    const links = [];
+    {{if .EnableHTTPLinks}}
+    links.push(`<a href="http://${ip}" target="_blank" title="HTTP"><i class="fas fa-globe"></i></a>`);
+    {{end}}
+    {{if .EnableHTTPSLinks}}
+    links.push(`<a href="https://${ip}" target="_blank" title="HTTPS"><i class="fas fa-lock"></i></a>`);
+    {{end}}
+    {{if .EnableSSHLinks}}
+    links.push(`<a href="ssh://${ip}" target="_blank" title="SSH"><i class="fas fa-terminal"></i></a>`);
+    {{end}}
+    
+    return links.length > 0 ? 
+      `<div class="lease-links mt-1">${links.join('')}</div>` : '';
+  }
+
+  function createDynamicLeaseInfo(lease) {
+    const now = new Date();
+    const expireDate = new Date(lease.expire);
+    const isExpired = expireDate < now;
+    
+    return `<div class="lease-info">
+      <div><strong>Expires:</strong> ${expireDate.toLocaleString()}</div>
+      <div><strong>Remaining:</strong> 
+        <span class="${isExpired ? 'text-danger' : 'text-success'}">
+          ${lease.remain}
+        </span>
+      </div>
+    </div>`;
+  }
+
+  function createActionButtons(lease) {
+    const buttons = [];
+    
+    if (lease.static) {
+      {{if .EnableEdit}}
+      buttons.push(`<button class="btn btn-outline-primary btn-sm" onclick="editStaticEntry('${lease.id}')" title="Edit">
+        <i class="fas fa-edit"></i>
+      </button>`);
+      buttons.push(`<button class="btn btn-outline-danger btn-sm" onclick="deleteStaticEntry('${lease.id}')" title="Delete">
+        <i class="fas fa-trash"></i>
+      </button>`);
+      {{end}}
+    } else {
+      {{if .EnableEdit}}
+      buttons.push(`<button class="btn btn-outline-success btn-sm" onclick="makeStatic('${lease.mac}', '${lease.ip}', '${lease.name}')" title="Make Static">
+        <i class="fas fa-thumbtack"></i>
+      </button>`);
+      {{end}}
+      buttons.push(`<button class="btn btn-outline-info btn-sm" onclick="showLeaseDetails('${lease.mac}')" title="Details">
+        <i class="fas fa-info-circle"></i>
+      </button>`);
+    }
+    
+    return `<div class="btn-group btn-group-sm">${buttons.join('')}</div>`;
+  }
+
+  function applyFilters() {
+    const typeFilter = $('#lease-type-filter').val();
+    const statusFilter = $('#lease-status-filter').val();
+    {{if .EnableNetworkTags}}
+    const networkFilter = $('#network-filter').val();
+    {{end}}
+    
+    leasesTable.columns().every(function() {
+      this.search('');
+    });
+    
+    // Apply custom filtering logic here if needed
+    leasesTable.draw();
+  }
+
+  {{if .EnableEdit}}
+  function showStaticModal(entryData = null) {
+    const modal = new bootstrap.Modal(document.getElementById('staticModal'));
+    const form = document.getElementById('staticForm');
+    
+    if (entryData) {
+      document.getElementById('staticModalLabel').textContent = 'Edit Static DHCP Entry';
+      document.getElementById('entry-id').value = entryData.id;
+      document.getElementById('entry-mac').value = formatMacForInput(entryData.mac) || '';
+      document.getElementById('entry-ip').value = entryData.ip || '';
+      document.getElementById('entry-hostname').value = entryData.hostname || '';
+      document.getElementById('entry-tag').value = entryData.tag || '';
+      document.getElementById('entry-lease-time').value = entryData.leaseTime || '';
+      document.getElementById('entry-comment').value = entryData.comment || '';
+      document.getElementById('entry-enabled').checked = entryData.enabled !== false;
+    } else {
+      document.getElementById('staticModalLabel').textContent = 'Add Static DHCP Entry';
+      form.reset();
+      document.getElementById('entry-enabled').checked = true;
+    }
+    
+    modal.show();
+  }
+
+  function saveStaticEntry() {
+    const form = document.getElementById('staticForm');
+    const id = document.getElementById('entry-id').value;
+    
+    const entry = {
+      mac: document.getElementById('entry-mac').value,
+      ip: document.getElementById('entry-ip').value || null,
+      hostname: document.getElementById('entry-hostname').value || '',
+      tag: document.getElementById('entry-tag').value || '',
+      leaseTime: document.getElementById('entry-lease-time').value || '',
+      comment: document.getElementById('entry-comment').value || '',
+      enabled: document.getElementById('entry-enabled').checked
+    };
+    
+    const action = id ? 'update' : 'add';
+    const requestData = {
+      action: action,
+      entry: entry
+    };
+    
+    if (id) {
+      requestData.id = id;
+    }
+    
+    $.ajax({
+      url: '/api/static',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(requestData),
+      success: function(response) {
+        if (response.success) {
+          const modal = bootstrap.Modal.getInstance(document.getElementById('staticModal'));
+          modal.hide();
+          refreshData();
+          showAlert('success', response.message);
+        } else {
+          showAlert('danger', response.message);
+        }
+      },
+      error: function(xhr) {
+        const response = JSON.parse(xhr.responseText || '{}');
+        showAlert('danger', response.message || 'An error occurred');
+      }
+    });
+  }
+
+  function editStaticEntry(id) {
+    $.ajax({
+      url: '/api/static',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        action: 'get',
+        id: id
+      }),
+      success: function(response) {
+        if (response.success) {
+          showStaticModal(response.data);
+        } else {
+          showAlert('danger', response.message);
+        }
+      },
+      error: function() {
+        showAlert('danger', 'Failed to load entry data');
+      }
+    });
+  }
+
+  function deleteStaticEntry(id) {
+    if (!confirm('Are you sure you want to delete this static DHCP entry?')) {
+      return;
+    }
+    
+    $.ajax({
+      url: '/api/static',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        action: 'delete',
+        id: id
+      }),
+      success: function(response) {
+        if (response.success) {
+          refreshData();
+          showAlert('success', response.message);
+        } else {
+          showAlert('danger', response.message);
+        }
+      },
+      error: function(xhr) {
+        const response = JSON.parse(xhr.responseText || '{}');
+        showAlert('danger', response.message || 'An error occurred');
+      }
+    });
+  }
+
+  function makeStatic(mac, ip, hostname) {
+    const entry = {
+      mac: mac,
+      ip: ip,
+      hostname: hostname || '',
+      enabled: true
+    };
+    
+    $.ajax({
+      url: '/api/static',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        action: 'add',
+        entry: entry
+      }),
+      success: function(response) {
+        if (response.success) {
+          refreshData();
+          showAlert('success', 'Dynamic lease converted to static reservation');
+        } else {
+          showAlert('danger', response.message);
+        }
+      },
+      error: function(xhr) {
+        const response = JSON.parse(xhr.responseText || '{}');
+        showAlert('danger', response.message || 'Failed to create static entry');
+      }
+    });
+  }
+
+  function saveConfiguration() {
+    $.ajax({
+      url: '/api/static',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        action: 'save'
+      }),
+      success: function(response) {
+        if (response.success) {
+          showAlert('success', response.message);
+        } else {
+          showAlert('danger', response.message);
+        }
+      },
+      error: function(xhr) {
+        const response = JSON.parse(xhr.responseText || '{}');
+        showAlert('danger', response.message || 'An error occurred');
+      }
+    });
+  }
+  {{end}}
+
+  function showLeaseDetails(mac) {
+    // Show detailed information about a lease
+    showAlert('info', `Showing details for MAC: ${formatMacAddress(mac)}`);
+  }
+
+  // Helper function to format MAC address for input fields
+  function formatMacForInput(mac) {
+    if (!mac) return '';
+    return mac.toUpperCase().replace(/[:-]/g, '').match(/.{2}/g).join(':');
+  }
+
+  // MAC address validation
+  $('#entry-mac').on('blur', function() {
+    const mac = this.value;
+    if (mac && !isValidMacAddress(mac)) {
+      this.classList.add('is-invalid');
+      showAlert('warning', 'Invalid MAC address format. Use AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF');
+    } else {
+      this.classList.remove('is-invalid');
+      if (mac) {
+        this.value = formatMacForInput(mac);
+      }
     }
   });
-  //setInterval( function() {$('#DHCPLeases').DataTable().ajax.reload(); }, 5000);
-</script> 
 
-<table id="DHCPLeases" class="table table-striped" style="width:90%">
-</table>
+  // IP address validation
+  $('#entry-ip').on('blur', function() {
+    const ip = this.value;
+    if (ip && !isValidIpAddress(ip)) {
+      this.classList.add('is-invalid');
+      showAlert('warning', 'Invalid IP address format');
+    } else {
+      this.classList.remove('is-invalid');
+    }
+  });
+
+  function isValidMacAddress(mac) {
+    const macPattern = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+    return macPattern.test(mac);
+  }
+
+  function isValidIpAddress(ip) {
+    if (!ip) return true; // IP is optional
+    const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    return ipPattern.test(ip);
+  }
+</script>
 
 <!-- vim: noai:ts=2:sw=2:set expandtab: -->
