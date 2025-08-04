@@ -27,6 +27,8 @@ func NewTemplateManager(htmlDir string) *TemplateManager {
 func (tm *TemplateManager) LoadTemplates() error {
 	templateFiles := map[string]string{
 		"bootstrap": "bootstrap.tmpl",
+		"header": "header.tmpl",
+		"footer": "footer.tmpl",
 		"leases":    "leases.tmpl",
 		"logs":      "logs.tmpl",
 		"splash":    "splash.tmpl",

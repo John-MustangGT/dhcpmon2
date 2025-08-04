@@ -25,13 +25,13 @@ type Server struct {
 
 // TemplateData holds data for template rendering
 type TemplateData struct {
-	PageTitle         string
-	PageBody          string
-	EnableHTTPLinks   bool
-	EnableHTTPSLinks  bool
-	EnableSSHLinks    bool
-	EnableNetworkTags bool
-	EnableEdit        bool
+    PageTitle         string
+    PageBody          template.HTML    // Changed from string to template.HTML
+    EnableHTTPLinks   bool
+    EnableHTTPSLinks  bool
+    EnableSSHLinks    bool
+    EnableNetworkTags bool
+    EnableEdit        bool
 }
 
 // NewServer creates a new web server
@@ -146,7 +146,8 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request, pageType str
 		return
 	}
 	
-	data.PageBody = content
+	// Convert to template.HTML to prevent escaping
+	data.PageBody = template.HTML(content)
 	
 	// Render main template
 	if tmpl, exists := s.templates["bootstrap"]; exists {
