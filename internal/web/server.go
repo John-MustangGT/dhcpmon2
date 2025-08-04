@@ -1,4 +1,4 @@
-// ===== internal/web/server.go (Updated) =====
+// ===== internal/web/server.go (Fixed) =====
 package web
 
 import (
@@ -26,7 +26,7 @@ type Server struct {
 // TemplateData holds data for template rendering
 type TemplateData struct {
     PageTitle         string
-    PageBody          template.HTML    // Changed from string to template.HTML
+    PageBody          template.HTML
     EnableHTTPLinks   bool
     EnableHTTPSLinks  bool
     EnableSSHLinks    bool
@@ -67,11 +67,25 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	
 	// Handle API requests
 	if apiType, exists := query["api"]; exists && len(apiType) > 0 {
+		log.Printf("API request: %s", apiType[0])
+		
+		// Route API calls to appropriate handlers
 		switch apiType[0] {
 		case "static":
 			s.handleStaticAPI(w, r)
+		case "leases.json":
+			s.handleLeasesAPI(w, r)
+		case "hosts.json":
+			s.handleHostsAPI(w, r)
+		case "logs.json":
+			s.handleLogsAPI(w, r)
+		case "remove":
+			s.handleRemoveAPI(w, r)
+		case "edit":
+			s.handleEditAPI(w, r)
 		default:
-			s.handleAPI(w, r, apiType[0])
+			log.Printf("Unknown API type: %s", apiType[0])
+			http.Error(w, `{"error":"Unknown API endpoint"}`, http.StatusNotFound)
 		}
 		return
 	}
@@ -80,6 +94,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	pageType := "splash"
 	if p, exists := query["p"]; exists && len(p) > 0 {
 		pageType = p[0]
+		log.Printf("Page request: %s", pageType)
 	}
 	
 	s.handlePage(w, r, pageType)
@@ -220,4 +235,3 @@ func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
-

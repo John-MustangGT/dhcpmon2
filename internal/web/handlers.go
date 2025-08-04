@@ -1,4 +1,4 @@
-// ===== internal/web/handlers.go =====
+// ===== internal/web/handlers.go (Fixed) =====
 package web
 
 import (
@@ -32,31 +32,14 @@ type LogEntryJSON struct {
 	Message   string `json:"message"`
 }
 
-// handleAPI handles API requests with better error handling and logging
-func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, apiType string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	
-	log.Printf("API request: %s from %s", apiType, r.RemoteAddr)
-	
-	switch apiType {
-	case "leases.json":
-		s.handleLeasesAPI(w, r)
-	case "hosts.json":
-		s.handleHostsAPI(w, r)
-	case "logs.json":
-		s.handleLogsAPI(w, r)
-	case "remove":
-		s.handleRemoveAPI(w, r)
-	case "edit":
-		s.handleEditAPI(w, r)
-	default:
-		http.Error(w, `{"error":"Unknown API endpoint"}`, http.StatusNotFound)
-	}
-}
-
 // handleLeasesAPI handles DHCP leases API requests
 func (s *Server) handleLeasesAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	log.Printf("Handling leases API request")
+	
 	leases := s.monitor.GetDHCPLeases()
+	log.Printf("Found %d DHCP leases", len(leases))
+	
 	jsonLeases := make([]DHCPLeaseJSON, len(leases))
 	
 	for i, lease := range leases {
@@ -68,14 +51,28 @@ func (s *Server) handleLeasesAPI(w http.ResponseWriter, r *http.Request) {
 			expireStr = lease.Expire.Format("2006-01-02 15:04:05")
 		}
 		
+		// Handle nil IP addresses
+		ipStr := ""
+		var ipSort uint32 = 0
+		if lease.IP != nil {
+			ipStr = lease.IP.String()
+			ipSort = s.ipToInt(lease.IP)
+		}
+		
+		// Handle nil MAC addresses
+		macStr := ""
+		if lease.MAC != nil {
+			macStr = lease.MAC.String()
+		}
+		
 		jsonLeases[i] = DHCPLeaseJSON{
 			Expire: expireStr,
 			Remain: remainStr,
 			Delta:  lease.Remain,
-			MAC:    lease.MAC.String(),
+			MAC:    macStr,
 			Info:   lease.Info,
-			IP:     lease.IP.String(),
-			IPSort: s.ipToInt(lease.IP),
+			IP:     ipStr,
+			IPSort: ipSort,
 			Name:   lease.Name,
 			ID:     lease.ID,
 			Tag:    lease.Tag,
@@ -92,7 +89,12 @@ func (s *Server) handleLeasesAPI(w http.ResponseWriter, r *http.Request) {
 
 // handleHostsAPI handles hosts file API requests
 func (s *Server) handleHostsAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	log.Printf("Handling hosts API request")
+	
 	hosts := s.monitor.GetHostEntries()
+	log.Printf("Found %d host entries", len(hosts))
+	
 	response := map[string]interface{}{"data": hosts}
 	
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -103,6 +105,9 @@ func (s *Server) handleHostsAPI(w http.ResponseWriter, r *http.Request) {
 
 // handleLogsAPI handles logs API requests
 func (s *Server) handleLogsAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	log.Printf("Handling logs API request")
+	
 	var logs interface{}
 	
 	if s.cfg.SystemD {
@@ -112,6 +117,7 @@ func (s *Server) handleLogsAPI(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Failed to get systemd logs: %v", sysErr)
 			logs = []LogEntryJSON{}
 		} else {
+			log.Printf("Found %d systemd log entries", len(logEntries))
 			jsonLogs := make([]LogEntryJSON, len(logEntries))
 			for i, entry := range logEntries {
 				jsonLogs[i] = LogEntryJSON{
@@ -126,6 +132,7 @@ func (s *Server) handleLogsAPI(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Get logs from local collection
 		logEntries := s.monitor.GetLogs()
+		log.Printf("Found %d local log entries", len(logEntries))
 		jsonLogs := make([]LogEntryJSON, len(logEntries))
 		for i, entry := range logEntries {
 			jsonLogs[i] = LogEntryJSON{
@@ -231,4 +238,3 @@ func (s *Server) ipToInt(ip net.IP) uint32 {
 	
 	return uint32(ip[0])<<24 + uint32(ip[1])<<16 + uint32(ip[2])<<8 + uint32(ip[3])
 }
-
