@@ -28,12 +28,15 @@ func main() {
 	
 	// Load configuration
 	cfg, err := config.New(configFile)
+	log.Printf("Loaded: %s", configFile)
+
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 	
 	// Initialize MAC database
 	macDB, err := mac.NewDatabase(cfg.MACDBFile, cfg.MACDBPreload)
+	log.Printf("Loaded: %s", cfg.MACDBFile)
 	if err != nil {
 		log.Fatalf("Failed to initialize MAC database: %v", err)
 	}
@@ -41,12 +44,14 @@ func main() {
 	
 	// Initialize DHCP parser
 	dhcpParser := dhcp.NewParser(macDB, cfg.StaticFile)
+	log.Printf("Parser: %s", cfg.StaticFile)
 	
 	// Initialize monitor
 	monitor := monitor.New(cfg, dhcpParser)
 	if err := monitor.Start(); err != nil {
 		log.Fatalf("Failed to start monitor: %v", err)
 	}
+	log.Printf("File Monitor Started")
 	defer monitor.Stop()
 	
 	// Initialize web server
