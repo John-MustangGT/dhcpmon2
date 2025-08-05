@@ -1,4 +1,4 @@
-<!-- ===== html/leases.tmpl (Updated with Static Integration) ===== -->
+<!-- ===== html/leases.tmpl (Fixed with Working Filters) ===== -->
 <div class="card">
   <div class="card-header">
     <div class="row align-items-center">
@@ -56,6 +56,22 @@
         </div>
       </div>
       {{end}}
+    </div>
+
+    <!-- Additional Search -->
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <div class="form-group">
+          <label class="form-label">Search:</label>
+          <input type="text" class="form-control search-box" id="global-search" 
+                 placeholder="Search by IP, MAC, hostname, or vendor...">
+        </div>
+      </div>
+      <div class="col-md-6 d-flex align-items-end">
+        <button class="btn btn-outline-secondary btn-sm" id="clear-filters-btn">
+          <i class="fas fa-times me-1"></i>Clear Filters
+        </button>
+      </div>
     </div>
 
     <div class="table-responsive">
@@ -173,6 +189,7 @@
 <script type="text/javascript">
   let leasesTable;
   let staticEntries = [];
+  let allLeases = []; // Store all leases for filtering
   
   $(document).ready(function() {
     // Initialize DataTable
@@ -182,11 +199,13 @@
       order: [[1, 'asc']], // Order by IP address
       columnDefs: [
         { orderable: false, targets: [0, -1] }, // Status and Actions columns not orderable
-        { searchable: false, targets: [0, -1] }
+        { searchable: true, targets: '_all' }
       ],
       language: {
         emptyTable: "No DHCP leases found"
-      }
+      },
+      // Disable built-in search since we're implementing custom filtering
+      searching: false
     });
 
     // Set up event handlers
@@ -222,6 +241,16 @@
     $('#lease-type-filter, #lease-status-filter, #network-filter').change(function() {
       applyFilters();
     });
+
+    // Global search handler
+    $('#global-search').on('input', function() {
+      applyFilters();
+    });
+
+    // Clear filters button
+    $('#clear-filters-btn').click(function() {
+      clearAllFilters();
+    });
   }
 
   function refreshData() {
@@ -231,7 +260,8 @@
       type: 'GET',
       dataType: 'json',
       success: function(response) {
-        updateLeasesTable(response.data || []);
+        allLeases = response.data || [];
+        updateLeasesTable(allLeases);
       },
       error: function() {
         showAlert('danger', 'Failed to load DHCP leases data');
@@ -258,11 +288,9 @@
   }
 
   function updateLeasesTable(leases) {
-    leasesTable.clear();
-    
     // Populate network filter dropdown
     {{if .EnableNetworkTags}}
-    const networks = [...new Set(leases.map(l => l.tag).filter(t => t))];
+    const networks = [...new Set(leases.map(l => l.tag).filter(t => t))].sort();
     const networkFilter = $('#network-filter');
     const currentNetwork = networkFilter.val();
     networkFilter.find('option:not(:first)').remove();
@@ -272,13 +300,92 @@
     networkFilter.val(currentNetwork);
     {{end}}
     
-    leases.forEach(function(lease) {
+    // Apply current filters to the data
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const typeFilter = $('#lease-type-filter').val();
+    const statusFilter = $('#lease-status-filter').val();
+    const globalSearch = $('#global-search').val().toLowerCase();
+    {{if .EnableNetworkTags}}
+    const networkFilter = $('#network-filter').val();
+    {{end}}
+
+    let filteredLeases = allLeases.filter(function(lease) {
+      // Type filter
+      if (typeFilter === 'dynamic' && lease.static) return false;
+      if (typeFilter === 'static' && !lease.static) return false;
+
+      // Status filter (for dynamic leases)
+      if (statusFilter && !lease.static) {
+        const now = new Date();
+        const expireDate = new Date(lease.expire);
+        const isExpired = expireDate < now;
+        
+        if (statusFilter === 'active' && isExpired) return false;
+        if (statusFilter === 'expired' && !isExpired) return false;
+      }
+
+      {{if .EnableNetworkTags}}
+      // Network filter
+      if (networkFilter && lease.tag !== networkFilter) return false;
+      {{end}}
+
+      // Global search
+      if (globalSearch) {
+        const searchFields = [
+          lease.ip || '',
+          lease.mac || '',
+          lease.name || '',
+          (lease.info && lease.info.companyName) || '',
+          lease.tag || ''
+        ].join(' ').toLowerCase();
+        
+        if (!searchFields.includes(globalSearch)) return false;
+      }
+
+      return true;
+    });
+
+    // Clear and repopulate table
+    leasesTable.clear();
+    
+    filteredLeases.forEach(function(lease) {
       const row = createLeaseRow(lease);
       leasesTable.row.add(row);
     });
     
     leasesTable.draw();
+
+    // Update filter count indicator
+    updateFilterStatus(filteredLeases.length, allLeases.length);
+  }
+
+  function clearAllFilters() {
+    $('#lease-type-filter').val('');
+    $('#lease-status-filter').val('');
+    $('#global-search').val('');
+    {{if .EnableNetworkTags}}
+    $('#network-filter').val('');
+    {{end}}
+    
     applyFilters();
+    showAlert('info', 'All filters cleared');
+  }
+
+  function updateFilterStatus(filtered, total) {
+    const statusText = filtered === total ? 
+      `Showing all ${total} leases` : 
+      `Showing ${filtered} of ${total} leases`;
+    
+    // Update or create status indicator
+    let statusElement = $('#filter-status');
+    if (statusElement.length === 0) {
+      statusElement = $('<div id="filter-status" class="text-muted small mb-2"></div>');
+      $('#LeasesTable_wrapper').prepend(statusElement);
+    }
+    statusElement.text(statusText);
   }
 
   function createLeaseRow(lease) {
@@ -390,21 +497,6 @@
     }
     
     return `<div class="btn-group btn-group-sm">${buttons.join('')}</div>`;
-  }
-
-  function applyFilters() {
-    const typeFilter = $('#lease-type-filter').val();
-    const statusFilter = $('#lease-status-filter').val();
-    {{if .EnableNetworkTags}}
-    const networkFilter = $('#network-filter').val();
-    {{end}}
-    
-    leasesTable.columns().every(function() {
-      this.search('');
-    });
-    
-    // Apply custom filtering logic here if needed
-    leasesTable.draw();
   }
 
   {{if .EnableEdit}}
@@ -583,7 +675,24 @@
 
   function showLeaseDetails(mac) {
     // Show detailed information about a lease
-    showAlert('info', `Showing details for MAC: ${formatMacAddress(mac)}`);
+    const lease = allLeases.find(l => l.mac === mac);
+    if (lease) {
+      let details = `<strong>MAC:</strong> ${formatMacAddress(lease.mac)}<br>`;
+      details += `<strong>IP:</strong> ${lease.ip || 'N/A'}<br>`;
+      details += `<strong>Hostname:</strong> ${lease.name || 'N/A'}<br>`;
+      if (lease.info && lease.info.companyName) {
+        details += `<strong>Vendor:</strong> ${lease.info.companyName}<br>`;
+      }
+      if (lease.tag) {
+        details += `<strong>Network Tag:</strong> ${lease.tag}<br>`;
+      }
+      if (!lease.static) {
+        details += `<strong>Expires:</strong> ${new Date(lease.expire).toLocaleString()}<br>`;
+        details += `<strong>Remaining:</strong> ${lease.remain}<br>`;
+      }
+      
+      showAlert('info', details);
+    }
   }
 
   // Helper function to format MAC address for input fields

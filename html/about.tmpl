@@ -1,0 +1,257 @@
+<!-- ===== html/about.tmpl ===== -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="fas fa-info-circle me-2"></i>
+      About DHCP Monitor
+    </h5>
+  </div>
+  <div class="card-body">
+    
+    <!-- Application Info -->
+    <div class="help-section">
+      <div class="row">
+        <div class="col-md-8">
+          <h4><i class="fas fa-network-wired me-2"></i>DHCP Monitor</h4>
+          <p class="lead">A modern, web-based DHCP lease monitoring and management system</p>
+          <p>DHCP Monitor provides real-time visibility into your DHCP server operations, including lease tracking, static reservation management, and comprehensive network device monitoring.</p>
+        </div>
+        <div class="col-md-4 text-center">
+          <div class="system-metric">
+            <div class="metric-label">Version</div>
+            <div class="metric-value" id="app-version">Loading...</div>
+          </div>
+          <div class="system-metric">
+            <div class="metric-label">Build Time</div>
+            <div class="metric-value" id="build-time">Loading...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="help-section">
+      <h4><i class="fas fa-star me-2"></i>Key Features</h4>
+      <div class="row">
+        <div class="col-md-6">
+          <ul>
+            <li><strong>Real-time Monitoring:</strong> Live DHCP lease tracking with auto-refresh</li>
+            <li><strong>Static Reservations:</strong> Full CRUD management of static DHCP entries</li>
+            <li><strong>MAC Address Lookup:</strong> Automatic vendor identification via OUI database</li>
+            <li><strong>Advanced Filtering:</strong> Multi-criteria search and filtering capabilities</li>
+            <li><strong>Network Tags:</strong> Organize devices by network segments or purposes</li>
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <ul>
+            <li><strong>Quick Access Links:</strong> Direct HTTP/HTTPS/SSH links to devices</li>
+            <li><strong>Host File Management:</strong> View and manage static host entries</li>
+            <li><strong>Log Monitoring:</strong> Integrated DHCP server log viewing</li>
+            <li><strong>System Information:</strong> Service status and system health monitoring</li>
+            <li><strong>Responsive Design:</strong> Modern, mobile-friendly interface</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Technical Specifications -->
+    <div class="help-section">
+      <h4><i class="fas fa-microchip me-2"></i>Technical Details</h4>
+      <div class="row">
+        <div class="col-md-6">
+          <h6>Backend Technologies:</h6>
+          <ul>
+            <li><strong>Language:</strong> Go (Golang)</li>
+            <li><strong>Web Server:</strong> Native Go HTTP server</li>
+            <li><strong>File Monitoring:</strong> fsnotify for real-time updates</li>
+            <li><strong>Configuration:</strong> INI-based configuration files</li>
+            <li><strong>Logging:</strong> Integrated with systemd journal</li>
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <h6>Frontend Technologies:</h6>
+          <ul>
+            <li><strong>Framework:</strong> Bootstrap 5.3</li>
+            <li><strong>JavaScript:</strong> jQuery 3.7</li>
+            <li><strong>Data Tables:</strong> DataTables.net</li>
+            <li><strong>Icons:</strong> Font Awesome 6.4</li>
+            <li><strong>Styling:</strong> Custom CSS with CSS Grid/Flexbox</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supported Systems -->
+    <div class="help-section">
+      <h4><i class="fas fa-server me-2"></i>Compatibility</h4>
+      <div class="row">
+        <div class="col-md-4">
+          <h6>DHCP Servers:</h6>
+          <ul>
+            <li>dnsmasq</li>
+            <li>ISC DHCP Server</li>
+            <li>Kea DHCP</li>
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h6>Operating Systems:</h6>
+          <ul>
+            <li>Linux (all distributions)</li>
+            <li>Docker containers</li>
+            <li>systemd integration</li>
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h6>Browsers:</h6>
+          <ul>
+            <li>Chrome/Chromium 90+</li>
+            <li>Firefox 88+</li>
+            <li>Safari 14+</li>
+            <li>Edge 90+</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Configuration Examples -->
+    <div class="help-section">
+      <h4><i class="fas fa-file-code me-2"></i>Sample Configuration</h4>
+      <p>Example dhcpmon.ini configuration with custom templates:</p>
+      <div class="code-block"># DHCP Monitor Configuration
+leasesfile = /var/lib/misc/dnsmasq.leases
+htmldir = /app/html  
+httplisten = 0.0.0.0:8067
+staticfile = /etc/dnsmasq.d/static.conf
+
+# Feature Configuration
+edit = true
+httplinks = true
+httpslinks = true
+sshlinks = true
+networktags = true
+systemd = true
+
+# MAC Address Database
+macdbfile = /app/macaddress.io-db.json
+macdbpreload = true
+
+# Custom Template Override
+[html]
+bootstrap = custom_bootstrap.tmpl
+leases = custom_leases.tmpl
+help = custom_help.tmpl</div>
+    </div>
+
+    <!-- Security Considerations -->
+    <div class="help-section">
+      <h4><i class="fas fa-shield-alt me-2"></i>Security</h4>
+      <div class="row">
+        <div class="col-md-6">
+          <h6>Access Control:</h6>
+          <ul>
+            <li>No built-in authentication (use reverse proxy)</li>
+            <li>Read-only mode available (disable edit flag)</li>
+            <li>File system permissions respected</li>
+            <li>No elevation of privileges</li>
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <h6>Recommendations:</h6>
+          <ul>
+            <li>Use behind nginx/Apache with authentication</li>
+            <li>Restrict network access via firewall</li>
+            <li>Regular security updates</li>
+            <li>Monitor access logs</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- License and Credits -->
+    <div class="help-section">
+      <div class="row">
+        <div class="col-md-6">
+          <h4><i class="fas fa-certificate me-2"></i>License</h4>
+          <p>DHCP Monitor is released under the MIT License. See the LICENSE file for full details.</p>
+          <p>This software is provided "as is" without warranty of any kind. Use at your own risk.</p>
+        </div>
+        <div class="col-md-6">
+          <h4><i class="fas fa-heart me-2"></i>Credits</h4>
+          <p>Built with love using:</p>
+          <ul>
+            <li><a href="https://golang.org" target="_blank">Go Programming Language</a></li>
+            <li><a href="https://getbootstrap.com" target="_blank">Bootstrap Framework</a></li>
+            <li><a href="https://datatables.net" target="_blank">DataTables</a></li>
+            <li><a href="https://fontawesome.com" target="_blank">Font Awesome</a></li>
+            <li><a href="https://macaddress.io" target="_blank">MAC Address Database</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Support Information -->
+    <div class="help-section">
+      <h4><i class="fas fa-life-ring me-2"></i>Support & Contributing</h4>
+      <div class="row">
+        <div class="col-md-6">
+          <h6>Getting Help:</h6>
+          <ul>
+            <li>Check the Help tab for usage instructions</li>
+            <li>Review the System tab for service status</li>
+            <li>Check application logs for error messages</li>
+            <li>Verify file permissions and paths</li>
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <h6>Contributing:</h6>
+          <ul>
+            <li>Report bugs and issues</li>
+            <li>Submit feature requests</li>
+            <li>Contribute code improvements</li>
+            <li>Share custom templates</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  $(document).ready(function() {
+    // Load version information
+    loadVersionInfo();
+  });
+
+  function loadVersionInfo() {
+    // Try to get version info from the server
+    $.ajax({
+      url: '/?api=version',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        if (response.version) {
+          $('#app-version').text(response.version);
+        }
+        if (response.buildTime) {
+          $('#build-time').text(new Date(response.buildTime).toLocaleDateString());
+        }
+        if (response.gitHash) {
+          $('#app-version').text(response.version + ' (' + response.gitHash.substring(0, 7) + ')');
+        }
+      },
+      error: function() {
+        // Fallback to showing build info from global variables if available
+        if (typeof window.buildInfo !== 'undefined') {
+          $('#app-version').text(window.buildInfo.version || 'Unknown');
+          $('#build-time').text(window.buildInfo.buildTime || 'Unknown');
+        } else {
+          $('#app-version').text('Development');
+          $('#build-time').text('Unknown');
+        }
+      }
+    });
+  }
+</script>
+
+<!-- vim: noai:ts=2:sw=2:set expandtab: -->

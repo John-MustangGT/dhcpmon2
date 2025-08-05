@@ -1,0 +1,198 @@
+<!-- ===== html/help.tmpl ===== -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="card-title mb-0">
+      <i class="fas fa-question-circle me-2"></i>
+      DHCP Monitor Help
+    </h5>
+  </div>
+  <div class="card-body">
+    
+    <!-- Getting Started -->
+    <div class="help-section">
+      <h4><i class="fas fa-play-circle me-2"></i>Getting Started</h4>
+      <p>DHCP Monitor provides real-time monitoring of your DHCP server leases, static reservations, and network devices. Use the tabs above to navigate between different views:</p>
+      <ul>
+        <li><strong>DHCP Leases:</strong> View active and expired DHCP leases, manage static reservations</li>
+        <li><strong>Hosts:</strong> View and manage static host entries from your hosts file</li>
+        <li><strong>Logs:</strong> Monitor DHCP server logs and system events</li>
+        <li><strong>System:</strong> View system information and service status</li>
+      </ul>
+    </div>
+
+    <!-- DHCP Leases Help -->
+    <div class="help-section">
+      <h4><i class="fas fa-laptop me-2"></i>DHCP Leases</h4>
+      <p>The DHCP Leases tab shows both dynamic and static DHCP assignments:</p>
+      
+      <h6>Filtering Options:</h6>
+      <ul>
+        <li><strong>Type Filter:</strong> Show all leases, dynamic only, or static only</li>
+        <li><strong>Status Filter:</strong> Filter by active or expired leases (dynamic only)</li>
+        {{if .EnableNetworkTags}}
+        <li><strong>Network Filter:</strong> Filter by network tag</li>
+        {{end}}
+        <li><strong>Global Search:</strong> Search across IP addresses, MAC addresses, hostnames, and vendors</li>
+      </ul>
+
+      {{if .EnableEdit}}
+      <h6>Managing Static Reservations:</h6>
+      <ul>
+        <li><strong>Add Static Entry:</strong> Click "Add Static Entry" to create new reservations</li>
+        <li><strong>Convert Dynamic to Static:</strong> Use the thumbtack icon on dynamic leases</li>
+        <li><strong>Edit/Delete:</strong> Use the edit/delete buttons on static entries</li>
+        <li><strong>Save Configuration:</strong> Click "Save Config" to write changes to disk</li>
+      </ul>
+      {{end}}
+
+      <h6>Lease Information:</h6>
+      <ul>
+        <li><strong>Status Indicators:</strong> Dynamic (green) vs Static (purple) leases</li>
+        <li><strong>MAC Address Lookup:</strong> Vendor information from OUI database</li>
+        <li><strong>Quick Links:</strong> Direct HTTP/HTTPS/SSH access to devices</li>
+        <li><strong>Expiration Tracking:</strong> Real-time lease expiration countdown</li>
+      </ul>
+    </div>
+
+    <!-- Configuration Help -->
+    <div class="help-section">
+      <h4><i class="fas fa-cog me-2"></i>Configuration</h4>
+      <p>DHCP Monitor is configured via the <code>dhcpmon.ini</code> file:</p>
+      
+      <div class="code-block"># Basic Configuration
+leasesfile = /var/lib/misc/dnsmasq.leases
+htmldir = /app/html
+httplisten = 127.0.0.1:8067
+staticfile = /etc/dnsmasq.d/static.conf
+
+# Feature Flags
+edit = true
+httplinks = true
+httpslinks = true
+sshlinks = true
+networktags = false
+
+# MAC Database
+macdbfile = /app/macaddress.io-db.json
+macdbpreload = false
+
+# HTML Templates Section
+[html]
+bootstrap = bootstrap.tmpl
+leases = leases.tmpl
+hosts = hosts.tmpl
+logs = logs.tmpl
+help = help.tmpl
+about = about.tmpl
+system = system.tmpl</div>
+
+      <h6>Template Customization:</h6>
+      <p>You can override the default templates by specifying custom template files in the <code>[html]</code> section of the configuration. This allows you to customize the appearance and functionality of each tab.</p>
+    </div>
+
+    <!-- API Documentation -->
+    <div class="help-section">
+      <h4><i class="fas fa-code me-2"></i>API Endpoints</h4>
+      <p>DHCP Monitor provides several API endpoints for integration:</p>
+      
+      <h6>Data APIs:</h6>
+      <div class="code-block">GET /?api=leases.json    # Get DHCP leases
+GET /?api=hosts.json     # Get host entries  
+GET /?api=logs.json      # Get log entries</div>
+
+      {{if .EnableEdit}}
+      <h6>Static DHCP Management API:</h6>
+      <div class="code-block">POST /api/static
+{
+  "action": "add|update|delete|list|get|save|reload",
+  "id": "entry_id",          # For update/delete/get
+  "entry": {
+    "mac": "AA:BB:CC:DD:EE:FF",
+    "ip": "192.168.1.100",
+    "hostname": "device-name",
+    "tag": "trusted",
+    "comment": "Description",
+    "enabled": true
+  }
+}</div>
+      {{end}}
+    </div>
+
+    <!-- Troubleshooting -->
+    <div class="help-section">
+      <h4><i class="fas fa-wrench me-2"></i>Troubleshooting</h4>
+      
+      <h6>Common Issues:</h6>
+      <ul>
+        <li><strong>No leases showing:</strong> Check that the leases file path is correct and readable</li>
+        <li><strong>Static entries not saving:</strong> Verify write permissions to the static configuration file</li>
+        <li><strong>Vendor information missing:</strong> Ensure the MAC database file is present and readable</li>
+        <li><strong>Logs not displaying:</strong> Check systemd configuration or log file permissions</li>
+      </ul>
+
+      <h6>File Permissions:</h6>
+      <div class="code-block"># Required file permissions
+chmod 644 /var/lib/misc/dnsmasq.leases     # Read access
+chmod 644 /etc/dnsmasq.d/static.conf       # Read/Write for editing
+chmod 644 /app/macaddress.io-db.json       # Read access</div>
+
+      <h6>Service Status:</h6>
+      <p>Check the System tab for current service status and system information. The monitor automatically watches for file changes and updates the display in real-time.</p>
+    </div>
+
+    <!-- Keyboard Shortcuts -->
+    <div class="help-section">
+      <h4><i class="fas fa-keyboard me-2"></i>Keyboard Shortcuts</h4>
+      <div class="row">
+        <div class="col-md-6">
+          <ul>
+            <li><kbd>Ctrl+R</kbd> - Refresh current page</li>
+            <li><kbd>Ctrl+F</kbd> - Focus search box</li>
+            <li><kbd>Escape</kbd> - Clear search/filters</li>
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <ul>
+            <li><kbd>1-6</kbd> - Navigate to tabs</li>
+            <li><kbd>Ctrl+S</kbd> - Save configuration (if editing enabled)</li>
+            <li><kbd>F5</kbd> - Hard refresh</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Keyboard shortcuts for help page
+  $(document).ready(function() {
+    $(document).keydown(function(e) {
+      // Number keys for tab navigation
+      if (e.which >= 49 && e.which <= 54 && !e.ctrlKey && !e.altKey) {
+        const tabIndex = e.which - 49;
+        const tabs = ['Leases', 'Hosts', 'Logs', 'System', 'Help', 'About'];
+        if (tabs[tabIndex]) {
+          window.location.href = '?p=' + tabs[tabIndex];
+        }
+        e.preventDefault();
+      }
+      
+      // Ctrl+F for search
+      if (e.ctrlKey && e.which === 70) {
+        $('#global-search').focus();
+        e.preventDefault();
+      }
+      
+      // Escape to clear
+      if (e.which === 27) {
+        if (typeof clearAllFilters === 'function') {
+          clearAllFilters();
+        }
+        e.preventDefault();
+      }
+    });
+  });
+</script>
+
+<!-- vim: noai:ts=2:sw=2:set expandtab: -->

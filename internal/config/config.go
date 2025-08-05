@@ -1,4 +1,4 @@
-// ===== internal/config/config.go =====
+// ===== internal/config/config.go (Updated with HTML Templates) =====
 package config
 
 import (
@@ -7,6 +7,17 @@ import (
 	"log"
 	"gopkg.in/ini.v1"
 )
+
+// HTMLTemplates holds template file mappings
+type HTMLTemplates struct {
+	Bootstrap string
+	Leases    string
+	Hosts     string
+	Logs      string
+	Help      string
+	About     string
+	System    string
+}
 
 // Config holds all application configuration
 type Config struct {
@@ -33,6 +44,9 @@ type Config struct {
 	SSHLinks      bool
 	NetworkTags   bool
 	Edit          bool
+	
+	// HTML Templates
+	Templates     HTMLTemplates
 }
 
 // DefaultConfig returns a configuration with default values
@@ -54,6 +68,15 @@ func DefaultConfig() *Config {
 		StaticFile:   "/etc/dnsmasq.d/static.conf",
 		NetworkTags:  false,
 		Edit:         true,
+		Templates: HTMLTemplates{
+			Bootstrap: "bootstrap.tmpl",
+			Leases:    "leases.tmpl", 
+			Hosts:     "hosts.tmpl",
+			Logs:      "logs.tmpl",
+			Help:      "help.tmpl",
+			About:     "about.tmpl",
+			System:    "system.tmpl",
+		},
 	}
 }
 
@@ -65,6 +88,7 @@ func (c *Config) LoadFromFile(filename string) error {
 		return err
 	}
 
+	// Load main section
 	section := cfg.Section("")
 	c.LeasesFile = section.Key("leasesfile").MustString(c.LeasesFile)
 	c.HTMLDir = section.Key("htmldir").MustString(c.HTMLDir)
@@ -82,6 +106,17 @@ func (c *Config) LoadFromFile(filename string) error {
 	c.StaticFile = section.Key("staticfile").MustString(c.StaticFile)
 	c.NetworkTags = section.Key("networktags").MustBool(c.NetworkTags)
 	c.Edit = section.Key("edit").MustBool(c.Edit)
+
+	// Load HTML templates section
+	if htmlSection, err := cfg.GetSection("html"); err == nil {
+		c.Templates.Bootstrap = htmlSection.Key("bootstrap").MustString(c.Templates.Bootstrap)
+		c.Templates.Leases = htmlSection.Key("leases").MustString(c.Templates.Leases)
+		c.Templates.Hosts = htmlSection.Key("hosts").MustString(c.Templates.Hosts)
+		c.Templates.Logs = htmlSection.Key("logs").MustString(c.Templates.Logs)
+		c.Templates.Help = htmlSection.Key("help").MustString(c.Templates.Help)
+		c.Templates.About = htmlSection.Key("about").MustString(c.Templates.About)
+		c.Templates.System = htmlSection.Key("system").MustString(c.Templates.System)
+	}
 
 	return nil
 }
@@ -136,6 +171,29 @@ func (c *Config) LoadFromEnv() {
 	if v := os.Getenv("EDIT"); v != "" {
 		c.Edit, _ = strconv.ParseBool(v)
 	}
+	
+	// HTML template environment variables
+	if v := os.Getenv("HTML_BOOTSTRAP"); v != "" {
+		c.Templates.Bootstrap = v
+	}
+	if v := os.Getenv("HTML_LEASES"); v != "" {
+		c.Templates.Leases = v
+	}
+	if v := os.Getenv("HTML_HOSTS"); v != "" {
+		c.Templates.Hosts = v
+	}
+	if v := os.Getenv("HTML_LOGS"); v != "" {
+		c.Templates.Logs = v
+	}
+	if v := os.Getenv("HTML_HELP"); v != "" {
+		c.Templates.Help = v
+	}
+	if v := os.Getenv("HTML_ABOUT"); v != "" {
+		c.Templates.About = v
+	}
+	if v := os.Getenv("HTML_SYSTEM"); v != "" {
+		c.Templates.System = v
+	}
 }
 
 // New creates a new configuration instance
@@ -151,3 +209,30 @@ func New(configFile string) (*Config, error) {
 	return cfg, nil
 }
 
+// GetTemplateMap returns a map of template names to filenames
+func (c *Config) GetTemplateMap() map[string]string {
+	return map[string]string{
+		"bootstrap": c.Templates.Bootstrap,
+		"leases":    c.Templates.Leases,
+		"hosts":     c.Templates.Hosts,
+		"logs":      c.Templates.Logs,
+		"help":      c.Templates.Help,
+		"about":     c.Templates.About,
+		"system":    c.Templates.System,
+	}
+}
+
+// ValidateTemplates checks if all template files exist
+func (c *Config) ValidateTemplates() []string {
+	var missing []string
+	templateMap := c.GetTemplateMap()
+	
+	for name, filename := range templateMap {
+		fullPath := c.HTMLDir + "/" + filename
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			missing = append(missing, name+" ("+filename+")")
+		}
+	}
+	
+	return missing
+}

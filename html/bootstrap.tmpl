@@ -1,4 +1,4 @@
-<!-- ===== html/bootstrap.tmpl (Updated Modern Version) ===== -->
+<!-- ===== html/bootstrap.tmpl (Updated with New Tabs) ===== -->
 <!doctype html>
 <html lang="en" translate="no">
   <head>
@@ -346,6 +346,53 @@
       .dataTables_wrapper .dataTables_info {
         color: var(--text-secondary);
       }
+
+      /* System info styles */
+      .system-metric {
+        background: rgba(102, 126, 234, 0.1);
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .system-metric .metric-label {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.25rem;
+      }
+
+      .system-metric .metric-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      /* Help content styles */
+      .help-section {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .help-section h4 {
+        color: var(--accent-color);
+        margin-bottom: 1rem;
+      }
+
+      .code-block {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 1rem;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+        font-size: 0.9rem;
+        color: #f8f8f2;
+        overflow-x: auto;
+        margin: 1rem 0;
+      }
     </style>
     <meta name="google" content="notranslate">
   </head>
@@ -384,6 +431,21 @@
         <li class="nav-item" role="presentation">
           <a class="nav-link" href="?p=Logs" data-page="Logs">
             <i class="fas fa-file-alt me-2"></i>Logs
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" href="?p=System" data-page="System">
+            <i class="fas fa-server me-2"></i>System
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" href="?p=Help" data-page="Help">
+            <i class="fas fa-question-circle me-2"></i>Help
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" href="?p=About" data-page="About">
+            <i class="fas fa-info-circle me-2"></i>About
           </a>
         </li>
       </ul>
@@ -445,6 +507,27 @@
         
         return `<span class="mac-address">${mac}</span>`;
       }
+
+      // Auto-refresh functionality for dynamic content
+      function enableAutoRefresh(interval = 30000) {
+        const currentPage = new URLSearchParams(window.location.search).get('p') || 'Leases';
+        
+        if (['Leases', 'System', 'Logs'].includes(currentPage)) {
+          setInterval(function() {
+            // Trigger refresh for dynamic pages
+            if (typeof refreshData === 'function') {
+              refreshData();
+            } else if (typeof refreshSystemInfo === 'function') {
+              refreshSystemInfo();
+            }
+          }, interval);
+        }
+      }
+
+      // Initialize auto-refresh on page load
+      $(document).ready(function() {
+        enableAutoRefresh();
+      });
     </script>
   </body>
 </html>

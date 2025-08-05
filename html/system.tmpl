@@ -1,0 +1,567 @@
+<!-- ===== html/system.tmpl ===== -->
+<div class="card">
+  <div class="card-header">
+    <div class="row align-items-center">
+      <div class="col">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-server me-2"></i>
+          System Information
+        </h5>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-outline-primary btn-sm" id="refresh-system-btn">
+          <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    
+    <!-- Service Status -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <h6><i class="fas fa-heartbeat me-2"></i>Service Status</h6>
+      </div>
+      <div class="col-md-3">
+        <div class="system-metric">
+          <div class="metric-label">DHCP Monitor</div>
+          <div class="metric-value text-success" id="monitor-status">
+            <i class="fas fa-circle me-1"></i>Running
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="system-metric">
+          <div class="metric-label">DHCP Server</div>
+          <div class="metric-value" id="dhcp-status">
+            <i class="fas fa-spinner fa-spin me-1"></i>Checking...
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="system-metric">
+          <div class="metric-label">File Watcher</div>
+          <div class="metric-value text-success" id="watcher-status">
+            <i class="fas fa-circle me-1"></i>Active
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="system-metric">
+          <div class="metric-label">Uptime</div>
+          <div class="metric-value" id="uptime">
+            <span id="uptime-value">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Metrics -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <h6><i class="fas fa-chart-line me-2"></i>System Metrics</h6>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">Active Leases</div>
+          <div class="metric-value" id="active-leases">-</div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">Static Entries</div>
+          <div class="metric-value" id="static-entries">-</div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">Host Entries</div>
+          <div class="metric-value" id="host-entries">-</div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">Log Entries</div>
+          <div class="metric-value" id="log-entries">-</div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">Memory Usage</div>
+          <div class="metric-value" id="memory-usage">-</div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">CPU Usage</div>
+          <div class="metric-value" id="cpu-usage">-</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Configuration Status -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <h6><i class="fas fa-cogs me-2"></i>Configuration</h6>
+      </div>
+      <div class="col-md-6">
+        <div class="system-metric">
+          <div class="metric-label">Configuration File</div>
+          <div class="metric-value" id="config-file">dhcpmon.ini</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="system-metric">
+          <div class="metric-label">Last Modified</div>
+          <div class="metric-value" id="config-modified">Loading...</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="system-metric">
+          <div class="metric-label">Leases File</div>
+          <div class="metric-value" id="leases-file">Loading...</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="system-metric">
+          <div class="metric-label">Static File</div>
+          <div class="metric-value" id="static-file">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature Status -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <h6><i class="fas fa-toggle-on me-2"></i>Features</h6>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">Edit Mode</div>
+          <div class="metric-value" id="edit-enabled">
+            {{if .EnableEdit}}
+            <i class="fas fa-check text-success"></i> Enabled
+            {{else}}
+            <i class="fas fa-times text-danger"></i> Disabled
+            {{end}}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">HTTP Links</div>
+          <div class="metric-value" id="http-links">
+            {{if .EnableHTTPLinks}}
+            <i class="fas fa-check text-success"></i> Enabled
+            {{else}}
+            <i class="fas fa-times text-danger"></i> Disabled
+            {{end}}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">HTTPS Links</div>
+          <div class="metric-value" id="https-links">
+            {{if .EnableHTTPSLinks}}
+            <i class="fas fa-check text-success"></i> Enabled
+            {{else}}
+            <i class="fas fa-times text-danger"></i> Disabled
+            {{end}}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">SSH Links</div>
+          <div class="metric-value" id="ssh-links">
+            {{if .EnableSSHLinks}}
+            <i class="fas fa-check text-success"></i> Enabled
+            {{else}}
+            <i class="fas fa-times text-danger"></i> Disabled
+            {{end}}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">Network Tags</div>
+          <div class="metric-value" id="network-tags">
+            {{if .EnableNetworkTags}}
+            <i class="fas fa-check text-success"></i> Enabled
+            {{else}}
+            <i class="fas fa-times text-danger"></i> Disabled
+            {{end}}
+          </div>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <div class="system-metric">
+          <div class="metric-label">systemd</div>
+          <div class="metric-value" id="systemd-enabled">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- File Information -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <h6><i class="fas fa-file-alt me-2"></i>Monitored Files</h6>
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Path</th>
+                <th>Status</th>
+                <th>Size</th>
+                <th>Last Modified</th>
+                <th>Permissions</th>
+              </tr>
+            </thead>
+            <tbody id="file-status-table">
+              <tr>
+                <td colspan="6" class="text-center">
+                  <i class="fas fa-spinner fa-spin me-2"></i>Loading file information...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Process Information -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <h6><i class="fas fa-microchip me-2"></i>Process Information</h6>
+      </div>
+      <div class="col-md-3">
+        <div class="system-metric">
+          <div class="metric-label">Process ID</div>
+          <div class="metric-value" id="process-id">Loading...</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="system-metric">
+          <div class="metric-label">Go Version</div>
+          <div class="metric-value" id="go-version">Loading...</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="system-metric">
+          <div class="metric-label">Goroutines</div>
+          <div class="metric-value" id="goroutines">Loading...</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="system-metric">
+          <div class="metric-label">GC Cycles</div>
+          <div class="metric-value" id="gc-cycles">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Events -->
+    <div class="row">
+      <div class="col-12">
+        <h6><i class="fas fa-history me-2"></i>Recent Events</h6>
+        <div class="system-metric">
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Event</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="recent-events">
+                <tr>
+                  <td colspan="3" class="text-center">
+                    <i class="fas fa-spinner fa-spin me-2"></i>Loading recent events...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let systemStartTime = new Date();
+  let uptimeInterval;
+  
+  $(document).ready(function() {
+    // Load initial system information
+    refreshSystemInfo();
+    
+    // Start uptime counter
+    startUptimeCounter();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(refreshSystemInfo, 30000);
+    
+    // Refresh button handler
+    $('#refresh-system-btn').click(function() {
+      refreshSystemInfo();
+      showAlert('info', 'System information refreshed');
+    });
+  });
+
+  function startUptimeCounter() {
+    uptimeInterval = setInterval(function() {
+      const now = new Date();
+      const uptime = now - systemStartTime;
+      const days = Math.floor(uptime / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((uptime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+      
+      let uptimeStr = '';
+      if (days > 0) uptimeStr += days + 'd ';
+      if (hours > 0) uptimeStr += hours + 'h ';
+      uptimeStr += minutes + 'm';
+      
+      $('#uptime-value').text(uptimeStr);
+    }, 60000); // Update every minute
+  }
+
+  function refreshSystemInfo() {
+    // Load system metrics
+    loadSystemMetrics();
+    loadFileStatus();
+    loadProcessInfo();
+    loadRecentEvents();
+  }
+
+  function loadSystemMetrics() {
+    // Get DHCP service status
+    checkDHCPService();
+    
+    // Load data counts
+    $.ajax({
+      url: '?api=leases.json',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        const leases = response.data || [];
+        const activeLeases = leases.filter(l => !l.static && new Date(l.expire) > new Date()).length;
+        const staticEntries = leases.filter(l => l.static).length;
+        
+        $('#active-leases').text(activeLeases);
+        $('#static-entries').text(staticEntries);
+      },
+      error: function() {
+        $('#active-leases').text('Error');
+        $('#static-entries').text('Error');
+      }
+    });
+
+    // Load hosts count
+    $.ajax({
+      url: '?api=hosts.json',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        const hosts = response.data || [];
+        $('#host-entries').text(hosts.length);
+      },
+      error: function() {
+        $('#host-entries').text('Error');
+      }
+    });
+
+    // Load logs count
+    $.ajax({
+      url: '?api=logs.json',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        const logs = response.data || [];
+        $('#log-entries').text(logs.length);
+      },
+      error: function() {
+        $('#log-entries').text('Error');
+      }
+    });
+
+    // Load system stats
+    $.ajax({
+      url: '?api=system.json',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        if (response.memory) {
+          $('#memory-usage').text(formatBytes(response.memory.used) + ' / ' + formatBytes(response.memory.total));
+        }
+        if (response.cpu) {
+          $('#cpu-usage').text(response.cpu.toFixed(1) + '%');
+        }
+        if (response.systemd !== undefined) {
+          $('#systemd-enabled').html(response.systemd ? 
+            '<i class="fas fa-check text-success"></i> Enabled' : 
+            '<i class="fas fa-times text-danger"></i> Disabled');
+        }
+      },
+      error: function() {
+        $('#memory-usage').text('N/A');
+        $('#cpu-usage').text('N/A');
+        $('#systemd-enabled').text('Unknown');
+      }
+    });
+  }
+
+  function checkDHCPService() {
+    $.ajax({
+      url: '?api=dhcp-status',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        if (response.running) {
+          $('#dhcp-status').html('<i class="fas fa-circle text-success me-1"></i>Running');
+        } else {
+          $('#dhcp-status').html('<i class="fas fa-circle text-danger me-1"></i>Stopped');
+        }
+      },
+      error: function() {
+        $('#dhcp-status').html('<i class="fas fa-circle text-warning me-1"></i>Unknown');
+      }
+    });
+  }
+
+  function loadFileStatus() {
+    $.ajax({
+      url: '?api=file-status',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        let tableRows = '';
+        
+        if (response.files && response.files.length > 0) {
+          response.files.forEach(function(file) {
+            const statusIcon = file.exists ? 
+              '<i class="fas fa-check text-success"></i>' : 
+              '<i class="fas fa-times text-danger"></i>';
+            
+            const statusText = file.exists ? 'OK' : 'Missing';
+            const sizeText = file.exists ? formatBytes(file.size) : '-';
+            const modifiedText = file.exists ? new Date(file.modified).toLocaleString() : '-';
+            const permissionsText = file.exists ? file.permissions : '-';
+            
+            tableRows += `
+              <tr>
+                <td><strong>${file.name}</strong></td>
+                <td><code>${file.path}</code></td>
+                <td>${statusIcon} ${statusText}</td>
+                <td>${sizeText}</td>
+                <td>${modifiedText}</td>
+                <td><code>${permissionsText}</code></td>
+              </tr>
+            `;
+          });
+        } else {
+          tableRows = '<tr><td colspan="6" class="text-center text-muted">No file information available</td></tr>';
+        }
+        
+        $('#file-status-table').html(tableRows);
+        
+        // Update individual file paths in configuration section
+        if (response.config) {
+          $('#config-file').text(response.config.configFile || 'dhcpmon.ini');
+          $('#config-modified').text(response.config.configModified ? 
+            new Date(response.config.configModified).toLocaleString() : 'Unknown');
+          $('#leases-file').text(response.config.leasesFile || 'Unknown');
+          $('#static-file').text(response.config.staticFile || 'Unknown');
+        }
+      },
+      error: function() {
+        $('#file-status-table').html(
+          '<tr><td colspan="6" class="text-center text-danger">Failed to load file information</td></tr>'
+        );
+      }
+    });
+  }
+
+  function loadProcessInfo() {
+    $.ajax({
+      url: '?api=process-info',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        $('#process-id').text(response.pid || 'Unknown');
+        $('#go-version').text(response.goVersion || 'Unknown');
+        $('#goroutines').text(response.goroutines || 'Unknown');
+        $('#gc-cycles').text(response.gcCycles || 'Unknown');
+      },
+      error: function() {
+        $('#process-id').text('N/A');
+        $('#go-version').text('N/A');
+        $('#goroutines').text('N/A');
+        $('#gc-cycles').text('N/A');
+      }
+    });
+  }
+
+  function loadRecentEvents() {
+    $.ajax({
+      url: '?api=recent-events',
+      type: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        let tableRows = '';
+        
+        if (response.events && response.events.length > 0) {
+          response.events.forEach(function(event) {
+            tableRows += `
+              <tr>
+                <td>${new Date(event.timestamp).toLocaleString()}</td>
+                <td><span class="badge bg-${getEventTypeClass(event.type)}">${event.type}</span></td>
+                <td>${event.message}</td>
+              </tr>
+            `;
+          });
+        } else {
+          tableRows = '<tr><td colspan="3" class="text-center text-muted">No recent events</td></tr>';
+        }
+        
+        $('#recent-events').html(tableRows);
+      },
+      error: function() {
+        $('#recent-events').html(
+          '<tr><td colspan="3" class="text-center text-danger">Failed to load recent events</td></tr>'
+        );
+      }
+    });
+  }
+
+  function getEventTypeClass(eventType) {
+    switch (eventType.toLowerCase()) {
+      case 'error': return 'danger';
+      case 'warning': return 'warning';
+      case 'info': return 'info';
+      case 'success': return 'success';
+      case 'start': return 'primary';
+      case 'stop': return 'secondary';
+      default: return 'secondary';
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  // Expose refresh function globally
+  window.refreshSystemInfo = refreshSystemInfo;
+</script>
+
+<!-- vim: noai:ts=2:sw=2:set expandtab: -->
