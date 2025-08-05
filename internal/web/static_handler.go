@@ -4,6 +4,7 @@ package web
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"log"
 	"net/http"
 	"strings"
@@ -13,10 +14,10 @@ import (
 
 // StaticDHCPRequest represents API requests for static DHCP management
 type StaticDHCPRequest struct {
-	Action string                     `json:"action"`
-	ID     string                     `json:"id,omitempty"`
-	Entry  models.StaticDHCPEntry     `json:"entry,omitempty"`
-	Filter map[string]string          `json:"filter,omitempty"`
+    Action string                     `json:"action"`
+    ID     string                     `json:"id,omitempty"`
+    Entry  StaticDHCPEntryJSON        `json:"entry,omitempty"`  // Changed to JSON type
+    Filter map[string]string          `json:"filter,omitempty"`
 }
 
 // StaticDHCPResponse represents API responses for static DHCP management
@@ -25,6 +26,19 @@ type StaticDHCPResponse struct {
 	Message string                     `json:"message,omitempty"`
 	Data    interface{}                `json:"data,omitempty"`
 	Errors  []string                   `json:"errors,omitempty"`
+}
+
+// StaticDHCPEntryJSON represents a static DHCP entry for JSON marshaling/unmarshaling
+type StaticDHCPEntryJSON struct {
+    ID         string `json:"id,omitempty"`
+    MAC        string `json:"mac"`
+    IP         string `json:"ip,omitempty"`
+    Hostname   string `json:"hostname,omitempty"`
+    Tag        string `json:"tag,omitempty"`
+    LeaseTime  string `json:"leaseTime,omitempty"`
+    Comment    string `json:"comment,omitempty"`
+    Enabled    bool   `json:"enabled"`
+    LineNumber int    `json:"lineNumber,omitempty"`
 }
 
 // handleStaticAPI handles static DHCP configuration API requests
@@ -73,18 +87,6 @@ func (s *Server) handleStaticAPI(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleStaticGet handles GET requests for static DHCP data
-func (s *Server) handleStaticGet(w http.ResponseWriter, r *http.Request) {
-	entries := s.monitor.GetStaticEntries()
-	
-	response := StaticDHCPResponse{
-		Success: true,
-		Data:    entries,
-	}
-	
-	json.NewEncoder(w).Encode(response)
-}
-
 // handleStaticList handles list requests
 func (s *Server) handleStaticList(w http.ResponseWriter, r *http.Request, req StaticDHCPRequest) {
 	entries := s.monitor.GetStaticEntries()
@@ -102,63 +104,107 @@ func (s *Server) handleStaticList(w http.ResponseWriter, r *http.Request, req St
 	json.NewEncoder(w).Encode(response)
 }
 
-// handleStaticGetOne handles get single entry requests
-func (s *Server) handleStaticGetOne(w http.ResponseWriter, r *http.Request, req StaticDHCPRequest) {
-	if req.ID == "" {
-		s.writeErrorResponse(w, "ID is required", http.StatusBadRequest)
-		return
-	}
-	
-	entry, err := s.monitor.GetStaticEntryByID(req.ID)
-	if err != nil {
-		s.writeErrorResponse(w, err.Error(), http.StatusNotFound)
-		return
-	}
-	
-	response := StaticDHCPResponse{
-		Success: true,
-		Data:    entry,
-	}
-	
-	json.NewEncoder(w).Encode(response)
-}
-
 // handleStaticAdd handles add entry requests
 func (s *Server) handleStaticAdd(w http.ResponseWriter, r *http.Request, req StaticDHCPRequest) {
-	if err := s.monitor.AddStaticEntry(req.Entry); err != nil {
-		s.writeErrorResponse(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	
-	response := StaticDHCPResponse{
-		Success: true,
-		Message: "Static DHCP entry added successfully",
-	}
-	
-	json.NewEncoder(w).Encode(response)
-	log.Printf("Added static DHCP entry: MAC=%s, IP=%s, Hostname=%s", 
-		req.Entry.MAC.String(), req.Entry.IP.String(), req.Entry.Hostname)
+    // Convert JSON entry to internal model
+    entry, err := req.Entry.ToStaticDHCPEntry()
+    if err != nil {
+        s.writeErrorResponse(w, fmt.Sprintf("Invalid entry data: %v", err), http.StatusBadRequest)
+        return
+    }
+    
+    if err := s.monitor.AddStaticEntry(entry); err != nil {
+        s.writeErrorResponse(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+    
+    response := StaticDHCPResponse{
+        Success: true,
+        Message: "Static DHCP entry added successfully",
+    }
+    
+    json.NewEncoder(w).Encode(response)
+    
+    macStr := "unknown"
+    ipStr := "unknown"
+    if entry.MAC != nil {
+        macStr = entry.MAC.String()
+    }
+    if entry.IP != nil {
+        ipStr = entry.IP.String()
+    }
+    
+    log.Printf("Added static DHCP entry: MAC=%s, IP=%s, Hostname=%s", 
+        macStr, ipStr, entry.Hostname)
 }
 
-// handleStaticUpdate handles update entry requests
 func (s *Server) handleStaticUpdate(w http.ResponseWriter, r *http.Request, req StaticDHCPRequest) {
-	if req.ID == "" {
-		s.writeErrorResponse(w, "ID is required", http.StatusBadRequest)
-		return
-	}
-	
-	if err := s.monitor.UpdateStaticEntry(req.ID, req.Entry); err != nil {
-		s.writeErrorResponse(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	
-	response := StaticDHCPResponse{
-		Success: true,
-		Message: "Static DHCP entry updated successfully",
-	}
-	
-	json.NewEncoder(w).Encode(response)
-	log.Printf("Updated static DHCP entry: ID=%s", req.ID)
+    if req.ID == "" {
+        s.writeErrorResponse(w, "ID is required", http.StatusBadRequest)
+        return
+    }
+    
+    // Convert JSON entry to internal model
+    entry, err := req.Entry.ToStaticDHCPEntry()
+    if err != nil {
+        s.writeErrorResponse(w, fmt.Sprintf("Invalid entry data: %v", err), http.StatusBadRequest)
+        return
+    }
+    
+    if err := s.monitor.UpdateStaticEntry(req.ID, entry); err != nil {
+        s.writeErrorResponse(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+    
+    response := StaticDHCPResponse{
+        Success: true,
+        Message: "Static DHCP entry updated successfully",
+    }
+    
+    json.NewEncoder(w).Encode(response)
+    log.Printf("Updated static DHCP entry: ID=%s", req.ID)
+}
+
+// Updated handleStaticGetOne to return JSON-friendly format
+func (s *Server) handleStaticGetOne(w http.ResponseWriter, r *http.Request, req StaticDHCPRequest) {
+    if req.ID == "" {
+        s.writeErrorResponse(w, "ID is required", http.StatusBadRequest)
+        return
+    }
+    
+    entry, err := s.monitor.GetStaticEntryByID(req.ID)
+    if err != nil {
+        s.writeErrorResponse(w, err.Error(), http.StatusNotFound)
+        return
+    }
+    
+    // Convert to JSON-friendly format
+    jsonEntry := FromStaticDHCPEntry(*entry)
+    
+    response := StaticDHCPResponse{
+        Success: true,
+        Data:    jsonEntry,
+    }
+    
+    json.NewEncoder(w).Encode(response)
+}
+
+// Updated handleStaticGet to return JSON-friendly format
+func (s *Server) handleStaticGet(w http.ResponseWriter, r *http.Request) {
+    entries := s.monitor.GetStaticEntries()
+    
+    // Convert all entries to JSON-friendly format
+    jsonEntries := make([]StaticDHCPEntryJSON, len(entries))
+    for i, entry := range entries {
+        jsonEntries[i] = FromStaticDHCPEntry(entry)
+    }
+    
+    response := StaticDHCPResponse{
+        Success: true,
+        Data:    jsonEntries,
+    }
+    
+    json.NewEncoder(w).Encode(response)
 }
 
 // handleStaticDelete handles delete entry requests
@@ -328,4 +374,59 @@ func (s *Server) writeErrorResponse(w http.ResponseWriter, message string, statu
 		Message: message,
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+func (j *StaticDHCPEntryJSON) ToStaticDHCPEntry() (models.StaticDHCPEntry, error) {
+    entry := models.StaticDHCPEntry{
+        ID:         j.ID,
+        Hostname:   j.Hostname,
+        Tag:        j.Tag,
+        LeaseTime:  j.LeaseTime,
+        Comment:    j.Comment,
+        Enabled:    j.Enabled,
+        LineNumber: j.LineNumber,
+    }
+
+    // Parse MAC address
+    if j.MAC != "" {
+        mac, err := net.ParseMAC(j.MAC)
+        if err != nil {
+            return entry, fmt.Errorf("invalid MAC address: %w", err)
+        }
+        entry.MAC = mac
+    }
+
+    // Parse IP address
+    if j.IP != "" {
+        ip := net.ParseIP(j.IP)
+        if ip == nil {
+            return entry, fmt.Errorf("invalid IP address: %s", j.IP)
+        }
+        entry.IP = ip
+    }
+
+    return entry, nil
+}
+
+// FromStaticDHCPEntry converts internal model to JSON representation
+func FromStaticDHCPEntry(entry models.StaticDHCPEntry) StaticDHCPEntryJSON {
+    j := StaticDHCPEntryJSON{
+        ID:         entry.ID,
+        Hostname:   entry.Hostname,
+        Tag:        entry.Tag,
+        LeaseTime:  entry.LeaseTime,
+        Comment:    entry.Comment,
+        Enabled:    entry.Enabled,
+        LineNumber: entry.LineNumber,
+    }
+
+    if entry.MAC != nil {
+        j.MAC = entry.MAC.String()
+    }
+
+    if entry.IP != nil {
+        j.IP = entry.IP.String()
+    }
+
+    return j
 }

@@ -1,4 +1,14 @@
-// ===== internal/web/handlers.go (Updated with MAC formatting) =====
+// ===== internal/web/handlers.go (Updated with working edit functionality) =====
+// 
+// Also update internal/web/server.go to add the edit route:
+//
+// func (s *Server) setupRoutes() {
+// 	s.mux.HandleFunc("/", s.handleRoot)
+// 	s.mux.HandleFunc("/api/static", s.handleStaticAPI)
+// 	s.mux.HandleFunc("/api/edit", s.handleEditAPI)  // Add this line
+// }
+// 
+// Or modify the handleRoot function to properly route edit requests
 package web
 
 import (
@@ -8,6 +18,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	
+	"dhcpmon/pkg/models"
 )
 
 // DHCPLeaseJSON represents a DHCP lease in JSON format
@@ -31,6 +43,24 @@ type LogEntryJSON struct {
 	UnixTime  int64  `json:"utime"`
 	Channel   string `json:"channel"`
 	Message   string `json:"message"`
+}
+
+// EditRequest represents an edit request from the frontend
+type EditRequest struct {
+	MAC      string `json:"mac"`
+	IP       string `json:"ip"`
+	Name     string `json:"name"`
+	Hostname string `json:"hostname"`
+	Tag      string `json:"tag"`
+	Comment  string `json:"comment"`
+	Static   bool   `json:"static"`
+}
+
+// EditResponse represents the response to an edit request
+type EditResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
 }
 
 // handleLeasesAPI handles DHCP leases API requests
@@ -160,9 +190,11 @@ func (s *Server) handleRemoveAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	
 	dataStr := r.FormValue("data")
 	if dataStr == "" {
-		http.Error(w, `{"error":"Missing data parameter"}`, http.StatusBadRequest)
+		s.writeJSONError(w, "Missing data parameter", http.StatusBadRequest)
 		return
 	}
 	
@@ -172,52 +204,247 @@ func (s *Server) handleRemoveAPI(w http.ResponseWriter, r *http.Request) {
 	var removeData map[string]interface{}
 	if err := json.Unmarshal([]byte(dataStr), &removeData); err != nil {
 		log.Printf("Failed to parse remove data: %v", err)
-		http.Error(w, `{"error":"Invalid JSON data"}`, http.StatusBadRequest)
+		s.writeJSONError(w, "Invalid JSON data", http.StatusBadRequest)
 		return
 	}
 	
-	// TODO: Implement actual removal logic here
-	// This would involve modifying the static hosts file or 
-	// sending commands to dnsmasq to remove dynamic leases
+	// Extract MAC address from the remove data
+	macStr, ok := removeData["mac"].(string)
+	if !ok || macStr == "" {
+		s.writeJSONError(w, "MAC address is required for removal", http.StatusBadRequest)
+		return
+	}
 	
-	w.Header().Set("Content-Type", "application/json")
-	response := map[string]string{
-		"status":  "success",
-		"message": "Remove request processed",
+	// Try to find and remove from static entries
+	staticEntries := s.monitor.GetStaticEntries()
+	var entryToRemove *models.StaticDHCPEntry
+	
+	for _, entry := range staticEntries {
+		if strings.EqualFold(entry.GetFormattedMAC(), strings.ToUpper(macStr)) {
+			entryToRemove = &entry
+			break
+		}
+	}
+	
+	if entryToRemove != nil {
+		if err := s.monitor.DeleteStaticEntry(entryToRemove.ID); err != nil {
+			log.Printf("Failed to delete static entry: %v", err)
+			s.writeJSONError(w, "Failed to delete static entry: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		// Save the changes
+		if err := s.monitor.SaveStaticEntries(); err != nil {
+			log.Printf("Failed to save static entries: %v", err)
+			s.writeJSONError(w, "Failed to save changes: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		response := EditResponse{
+			Success: true,
+			Message: "Entry removed successfully",
+		}
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	
+	// If not found in static entries, return appropriate message
+	response := EditResponse{
+		Success: false,
+		Message: "Cannot remove dynamic DHCP lease. Only static entries can be removed.",
 	}
 	json.NewEncoder(w).Encode(response)
 }
 
 // handleEditAPI handles edit requests for DHCP entries
 func (s *Server) handleEditAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.handleEditGetData(w, r)
+		return
+	}
+	
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 	
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	
 	dataStr := r.FormValue("data")
 	if dataStr == "" {
-		http.Error(w, `{"error":"Missing data parameter"}`, http.StatusBadRequest)
+		s.writeJSONError(w, "Missing data parameter", http.StatusBadRequest)
 		return
 	}
 	
 	log.Printf("Edit request received: %s", dataStr)
 	
 	// Parse the JSON data
-	var editData map[string]interface{}
+	var editData EditRequest
 	if err := json.Unmarshal([]byte(dataStr), &editData); err != nil {
 		log.Printf("Failed to parse edit data: %v", err)
-		http.Error(w, `{"error":"Invalid JSON data"}`, http.StatusBadRequest)
+		s.writeJSONError(w, "Invalid JSON data", http.StatusBadRequest)
 		return
 	}
 	
-	// TODO: Implement actual edit logic here
-	// This would involve updating configuration files
+	// Validate required fields
+	if editData.MAC == "" {
+		s.writeJSONError(w, "MAC address is required", http.StatusBadRequest)
+		return
+	}
 	
-	w.Header().Set("Content-Type", "application/json")
-	response := map[string]string{
-		"status":  "success",
-		"message": "Edit request processed",
+	// Parse and validate MAC address
+	mac, err := net.ParseMAC(editData.MAC)
+	if err != nil {
+		s.writeJSONError(w, "Invalid MAC address format", http.StatusBadRequest)
+		return
+	}
+	
+	// Parse IP address if provided
+	var ip net.IP
+	if editData.IP != "" {
+		ip = net.ParseIP(editData.IP)
+		if ip == nil {
+			s.writeJSONError(w, "Invalid IP address format", http.StatusBadRequest)
+			return
+		}
+	}
+	
+	// Determine hostname (use Name if Hostname is empty)
+	hostname := editData.Hostname
+	if hostname == "" {
+		hostname = editData.Name
+	}
+	
+	// Look for existing static entry with this MAC
+	staticEntries := s.monitor.GetStaticEntries()
+	var existingEntry *models.StaticDHCPEntry
+	
+	for _, entry := range staticEntries {
+		if strings.EqualFold(entry.GetFormattedMAC(), strings.ToUpper(editData.MAC)) {
+			existingEntry = &entry
+			break
+		}
+	}
+	
+	if existingEntry != nil {
+		// Update existing static entry
+		updatedEntry := models.StaticDHCPEntry{
+			MAC:       mac,
+			IP:        ip,
+			Hostname:  hostname,
+			Tag:       editData.Tag,
+			Comment:   editData.Comment,
+			Enabled:   true,
+		}
+		
+		if err := s.monitor.UpdateStaticEntry(existingEntry.ID, updatedEntry); err != nil {
+			log.Printf("Failed to update static entry: %v", err)
+			s.writeJSONError(w, "Failed to update entry: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Create new static entry
+		newEntry := models.StaticDHCPEntry{
+			MAC:       mac,
+			IP:        ip,
+			Hostname:  hostname,
+			Tag:       editData.Tag,
+			Comment:   editData.Comment,
+			Enabled:   true,
+		}
+		
+		if err := s.monitor.AddStaticEntry(newEntry); err != nil {
+			log.Printf("Failed to add static entry: %v", err)
+			s.writeJSONError(w, "Failed to add entry: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	
+	// Save the changes
+	if err := s.monitor.SaveStaticEntries(); err != nil {
+		log.Printf("Failed to save static entries: %v", err)
+		s.writeJSONError(w, "Failed to save changes: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	response := EditResponse{
+		Success: true,
+		Message: "Entry saved successfully",
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleEditGetData handles GET requests to retrieve data for editing
+func (s *Server) handleEditGetData(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	
+	macParam := r.URL.Query().Get("mac")
+	if macParam == "" {
+		s.writeJSONError(w, "MAC address parameter is required", http.StatusBadRequest)
+		return
+	}
+	
+	log.Printf("Getting edit data for MAC: %s", macParam)
+	
+	// First check static entries
+	staticEntries := s.monitor.GetStaticEntries()
+	for _, entry := range staticEntries {
+		if strings.EqualFold(entry.GetFormattedMAC(), strings.ToUpper(macParam)) {
+			response := map[string]interface{}{
+				"success": true,
+				"data": map[string]interface{}{
+					"mac":      entry.GetFormattedMAC(),
+					"ip":       entry.GetFormattedIP(),
+					"hostname": entry.Hostname,
+					"name":     entry.Hostname,
+					"tag":      entry.Tag,
+					"comment":  entry.Comment,
+					"static":   true,
+					"enabled":  entry.Enabled,
+				},
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+	
+	// Then check current DHCP leases
+	leases := s.monitor.GetDHCPLeases()
+	for _, lease := range leases {
+		if lease.MAC != nil && strings.EqualFold(strings.ToUpper(lease.MAC.String()), strings.ToUpper(macParam)) {
+			ipStr := ""
+			if lease.IP != nil {
+				ipStr = lease.IP.String()
+			}
+			
+			response := map[string]interface{}{
+				"success": true,
+				"data": map[string]interface{}{
+					"mac":      s.formatMACAddress(lease.MAC),
+					"ip":       ipStr,
+					"hostname": lease.Name,
+					"name":     lease.Name,
+					"tag":      lease.Tag,
+					"comment":  "",
+					"static":   lease.Static,
+					"enabled":  true,
+				},
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+	
+	// Entry not found
+	s.writeJSONError(w, "Entry not found", http.StatusNotFound)
+}
+
+// Helper function to write JSON error responses
+func (s *Server) writeJSONError(w http.ResponseWriter, message string, statusCode int) {
+	w.WriteHeader(statusCode)
+	response := EditResponse{
+		Success: false,
+		Error:   message,
 	}
 	json.NewEncoder(w).Encode(response)
 }

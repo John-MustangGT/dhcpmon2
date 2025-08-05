@@ -66,7 +66,7 @@ func (p *Parser) ParseLeases(content string) ([]models.DHCPLease, error) {
 // parseLeaseLine parses a single lease line
 func (p *Parser) parseLeaseLine(fields []string) (models.DHCPLease, error) {
 	var lease models.DHCPLease
-	
+
 	// Parse expire time
 	if timestamp, err := strconv.ParseInt(fields[0], 10, 64); err == nil {
 		lease.Expire = time.Unix(timestamp, 0)

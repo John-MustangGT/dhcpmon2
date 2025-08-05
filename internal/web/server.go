@@ -63,6 +63,7 @@ func (s *Server) Start() error {
 func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("/", s.handleRoot)
 	s.mux.HandleFunc("/api/static", s.handleStaticAPI)
+	s.mux.HandleFunc("/api/edit", s.handleEditAPI)
 }
 
 // handleRoot handles the main page requests

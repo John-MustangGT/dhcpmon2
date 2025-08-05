@@ -1,4 +1,4 @@
-<!-- ===== html/leases.tmpl (Fixed with Working Filters) ===== -->
+<!-- ===== html/leases.tmpl (Fixed to use MAC address for editing) ===== -->
 <div class="card">
   <div class="card-header">
     <div class="row align-items-center">
@@ -107,6 +107,7 @@
       <div class="modal-body">
         <form id="staticForm">
           <input type="hidden" id="entry-id">
+          <input type="hidden" id="original-mac">
           
           <div class="row">
             <div class="col-md-6">
@@ -423,7 +424,7 @@
       '<span class="badge bg-success">Permanent</span>' :
       createDynamicLeaseInfo(lease);
     
-    // Actions
+    // Actions - FIXED: Use MAC address for edit button
     const actions = createActionButtons(lease);
     
     const row = [
@@ -476,22 +477,25 @@
   function createActionButtons(lease) {
     const buttons = [];
     
+    // FIXED: Use MAC address for all operations instead of lease.id
+    const macAddress = lease.mac || '';
+    
     if (lease.static) {
       {{if .EnableEdit}}
-      buttons.push(`<button class="btn btn-outline-primary btn-sm" onclick="editStaticEntry('${lease.id}')" title="Edit">
+      buttons.push(`<button class="btn btn-outline-primary btn-sm" onclick="editEntryByMac('${macAddress}')" title="Edit">
         <i class="fas fa-edit"></i>
       </button>`);
-      buttons.push(`<button class="btn btn-outline-danger btn-sm" onclick="deleteStaticEntry('${lease.id}')" title="Delete">
+      buttons.push(`<button class="btn btn-outline-danger btn-sm" onclick="deleteEntryByMac('${macAddress}')" title="Delete">
         <i class="fas fa-trash"></i>
       </button>`);
       {{end}}
     } else {
       {{if .EnableEdit}}
-      buttons.push(`<button class="btn btn-outline-success btn-sm" onclick="makeStatic('${lease.mac}', '${lease.ip}', '${lease.name}')" title="Make Static">
+      buttons.push(`<button class="btn btn-outline-success btn-sm" onclick="makeStatic('${macAddress}', '${lease.ip || ''}', '${lease.name || ''}')" title="Make Static">
         <i class="fas fa-thumbtack"></i>
       </button>`);
       {{end}}
-      buttons.push(`<button class="btn btn-outline-info btn-sm" onclick="showLeaseDetails('${lease.mac}')" title="Details">
+      buttons.push(`<button class="btn btn-outline-info btn-sm" onclick="showLeaseDetails('${macAddress}')" title="Details">
         <i class="fas fa-info-circle"></i>
       </button>`);
     }
@@ -506,10 +510,11 @@
     
     if (entryData) {
       document.getElementById('staticModalLabel').textContent = 'Edit Static DHCP Entry';
-      document.getElementById('entry-id').value = entryData.id;
+      document.getElementById('entry-id').value = entryData.id || '';
+      document.getElementById('original-mac').value = entryData.mac || '';
       document.getElementById('entry-mac').value = formatMacForInput(entryData.mac) || '';
       document.getElementById('entry-ip').value = entryData.ip || '';
-      document.getElementById('entry-hostname').value = entryData.hostname || '';
+      document.getElementById('entry-hostname').value = entryData.hostname || entryData.name || '';
       document.getElementById('entry-tag').value = entryData.tag || '';
       document.getElementById('entry-lease-time').value = entryData.leaseTime || '';
       document.getElementById('entry-comment').value = entryData.comment || '';
@@ -526,6 +531,7 @@
   function saveStaticEntry() {
     const form = document.getElementById('staticForm');
     const id = document.getElementById('entry-id').value;
+    const originalMac = document.getElementById('original-mac').value;
     
     const entry = {
       mac: document.getElementById('entry-mac').value,
@@ -536,6 +542,18 @@
       comment: document.getElementById('entry-comment').value || '',
       enabled: document.getElementById('entry-enabled').checked
     };
+    
+    // Validate MAC address
+    if (!entry.mac || !isValidMacAddress(entry.mac)) {
+      showAlert('danger', 'Please enter a valid MAC address');
+      return;
+    }
+    
+    // Validate IP address if provided
+    if (entry.ip && !isValidIpAddress(entry.ip)) {
+      showAlert('danger', 'Please enter a valid IP address');
+      return;
+    }
     
     const action = id ? 'update' : 'add';
     const requestData = {
@@ -569,86 +587,116 @@
     });
   }
 
-  function editStaticEntry(id) {
-    $.ajax({
-      url: '/api/static',
-      type: 'POST',
-      contentType: 'application/json',
-      data: JSON.stringify({
-        action: 'get',
-        id: id
-      }),
-      success: function(response) {
-        if (response.success) {
-          showStaticModal(response.data);
-        } else {
-          showAlert('danger', response.message);
-        }
-      },
-      error: function() {
-        showAlert('danger', 'Failed to load entry data');
-      }
-    });
-  }
-
-  function deleteStaticEntry(id) {
-    if (!confirm('Are you sure you want to delete this static DHCP entry?')) {
+  // FIXED: New function to edit entry by MAC address
+  function editEntryByMac(mac) {
+    if (!mac) {
+      showAlert('danger', 'MAC address is required');
       return;
     }
     
+    console.log('Editing entry with MAC:', mac);
+    
+    // Make GET request to retrieve entry data by MAC
     $.ajax({
-      url: '/api/static',
-      type: 'POST',
-      contentType: 'application/json',
-      data: JSON.stringify({
-        action: 'delete',
-        id: id
-      }),
+      url: '/api/edit?mac=' + encodeURIComponent(mac),
+      type: 'GET',
+      dataType: 'json',
       success: function(response) {
+        console.log('Edit data response:', response);
         if (response.success) {
-          refreshData();
-          showAlert('success', response.message);
+          showStaticModal(response.data);
         } else {
-          showAlert('danger', response.message);
+          showAlert('danger', response.message || 'Failed to load entry data');
         }
       },
-      error: function(xhr) {
+      error: function(xhr, status, error) {
+        console.error('Edit request failed:', status, error);
         const response = JSON.parse(xhr.responseText || '{}');
-        showAlert('danger', response.message || 'An error occurred');
+        showAlert('danger', response.error || 'Failed to load entry data');
       }
     });
   }
 
-  function makeStatic(mac, ip, hostname) {
-    const entry = {
-      mac: mac,
-      ip: ip,
-      hostname: hostname || '',
-      enabled: true
+  // FIXED: New function to delete entry by MAC address
+  function deleteEntryByMac(mac) {
+    if (!mac) {
+      showAlert('danger', 'MAC address is required');
+      return;
+    }
+    
+    if (!confirm('Are you sure you want to delete this DHCP entry?')) {
+      return;
+    }
+    
+    // Use the existing remove API with MAC address
+    const removeData = {
+      mac: mac
     };
     
     $.ajax({
-      url: '/api/static',
+      url: '?api=remove',
       type: 'POST',
-      contentType: 'application/json',
-      data: JSON.stringify({
-        action: 'add',
-        entry: entry
-      }),
+      data: {
+        data: JSON.stringify(removeData)
+      },
       success: function(response) {
         if (response.success) {
           refreshData();
-          showAlert('success', 'Dynamic lease converted to static reservation');
+          showAlert('success', response.message || 'Entry deleted successfully');
         } else {
-          showAlert('danger', response.message);
+          showAlert('danger', response.message || 'Failed to delete entry');
         }
       },
       error: function(xhr) {
         const response = JSON.parse(xhr.responseText || '{}');
-        showAlert('danger', response.message || 'Failed to create static entry');
+        showAlert('danger', response.error || 'An error occurred');
       }
     });
   }
+
+function makeStatic(mac, ip, hostname) {
+  // Ensure proper data structure for the backend
+  const entry = {
+    mac: mac,
+    ip: ip || null,  // Send null if empty instead of empty string
+    hostname: hostname || '',
+    tag: '',         // Add empty tag field
+    leaseTime: '',   // Add empty lease time field
+    comment: 'Converted from dynamic lease',  // Add helpful comment
+    enabled: true
+  };
+  
+  $.ajax({
+    url: '/api/static',
+    type: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify({
+      action: 'add',
+      entry: entry
+    }),
+    success: function(response) {
+      if (response.success) {
+        refreshData();
+        showAlert('success', 'Dynamic lease converted to static reservation');
+      } else {
+        showAlert('danger', response.message || 'Failed to create static entry');
+      }
+    },
+    error: function(xhr) {
+      let errorMessage = 'Failed to create static entry';
+      try {
+        const response = JSON.parse(xhr.responseText || '{}');
+        errorMessage = response.message || errorMessage;
+      } catch (e) {
+        // Use default error message if JSON parsing fails
+      }
+      showAlert('danger', errorMessage);
+      
+      // Log the actual error for debugging
+      console.error('makeStatic error:', xhr.status, xhr.responseText);
+    }
+  });
+}
 
   function saveConfiguration() {
     $.ajax({
@@ -701,6 +749,12 @@
     return mac.toUpperCase().replace(/[:-]/g, '').match(/.{2}/g).join(':');
   }
 
+  // Helper function to format MAC address for display
+  function formatMacAddress(mac) {
+    if (!mac) return '';
+    return mac.toUpperCase();
+  }
+
   // MAC address validation
   $('#entry-mac').on('blur', function() {
     const mac = this.value;
@@ -736,6 +790,32 @@
     const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
     return ipPattern.test(ip);
   }
+
+  // Global showAlert function (should be defined in your main template)
+  function showAlert(type, message, duration = 5000) {
+    const alertHtml = `
+      <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    `;
+    
+    // Find or create alert container
+    let alertContainer = $('#alert-container');
+    if (alertContainer.length === 0) {
+      alertContainer = $('<div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>');
+      $('body').append(alertContainer);
+    }
+    
+    const alertElement = $(alertHtml);
+    alertContainer.append(alertElement);
+    
+    // Auto-dismiss after duration
+    if (duration > 0) {
+      setTimeout(() => {
+        alertElement.alert('close');
+      }, duration);
+    }
+  }
 </script>
 
-<!-- vim: noai:ts=2:sw=2:set expandtab: -->

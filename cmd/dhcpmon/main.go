@@ -1,3 +1,4 @@
+// Debug version of main.go with more detailed logging
 package main
 
 import (
@@ -5,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 	
 	"dhcpmon/internal/config"
 	"dhcpmon/internal/mac"
@@ -28,7 +30,6 @@ func main() {
 	
 	// Load configuration
 	cfg, err := config.New(configFile)
-	log.Printf("Loaded: %s", configFile)
 
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
@@ -36,7 +37,6 @@ func main() {
 	
 	// Initialize MAC database
 	macDB, err := mac.NewDatabase(cfg.MACDBFile, cfg.MACDBPreload)
-	log.Printf("Loaded: %s", cfg.MACDBFile)
 	if err != nil {
 		log.Fatalf("Failed to initialize MAC database: %v", err)
 	}
@@ -44,24 +44,37 @@ func main() {
 	
 	// Initialize DHCP parser
 	dhcpParser := dhcp.NewParser(macDB, cfg.StaticFile)
-	log.Printf("Parser: %s", cfg.StaticFile)
 	
 	// Initialize monitor
 	monitor := monitor.New(cfg, dhcpParser)
-	if err := monitor.Start(); err != nil {
-		log.Fatalf("Failed to start monitor: %v", err)
+	
+	// Add timeout to detect hanging
+	done := make(chan error, 1)
+	go func() {
+		done <- monitor.Start()
+	}()
+	
+	select {
+	case err := <-done:
+		if err != nil {
+			log.Fatalf("Failed to start monitor: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		log.Fatal("TIMEOUT: Monitor.Start() took longer than 30 seconds - likely hanging")
 	}
-	log.Printf("File Monitor Started")
+	
 	defer monitor.Stop()
 	
 	// Initialize web server
 	webServer := web.NewServer(cfg, monitor)
+	
 	go func() {
 		log.Printf("Starting HTTP server on %s", cfg.HTTPListen)
 		if err := webServer.Start(); err != nil {
 			log.Fatalf("HTTP server failed: %v", err)
 		}
 	}()
+	
 	
 	// Wait for interrupt signal
 	sigChan := make(chan os.Signal, 1)
@@ -70,3 +83,4 @@ func main() {
 	
 	log.Println("Shutting down...")
 }
+

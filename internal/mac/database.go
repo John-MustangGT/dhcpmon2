@@ -93,12 +93,13 @@ func (db *Database) preloadDatabase() error {
 func (db *Database) Lookup(mac string) *models.OUIEntry {
 	mac = strings.ToUpper(mac)
 	
+	// First check cache with read lock
 	db.mu.RLock()
-	defer db.mu.RUnlock()
 	
 	// Try cache first with progressively shorter prefixes
 	for i := len(mac); i >= 0; i-- {
 		if entry, exists := db.cache[mac[0:i]]; exists {
+			db.mu.RUnlock()
 			return entry
 		}
 	}
@@ -107,24 +108,48 @@ func (db *Database) Lookup(mac string) *models.OUIEntry {
 	if len(mac) > 1 {
 		switch mac[1] {
 		case '2':
-			return db.cache["PRIVATE-2"]
+			if entry := db.cache["PRIVATE-2"]; entry != nil {
+				db.mu.RUnlock()
+				return entry
+			}
 		case '6':
-			return db.cache["PRIVATE-6"]
+			if entry := db.cache["PRIVATE-6"]; entry != nil {
+				db.mu.RUnlock()
+				return entry
+			}
 		case 'A':
-			return db.cache["PRIVATE-A"]
+			if entry := db.cache["PRIVATE-A"]; entry != nil {
+				db.mu.RUnlock()
+				return entry
+			}
 		case 'E':
-			return db.cache["PRIVATE-E"]
+			if entry := db.cache["PRIVATE-E"]; entry != nil {
+				db.mu.RUnlock()
+				return entry
+			}
 		}
 	}
+	
+	// Check if preloaded - if so, return unknown
+	if db.preloaded {
+		unknown := db.cache["UNKNOWN"]
+		db.mu.RUnlock()
+		return unknown
+	}
+	
+	// Release read lock before file search
+	db.mu.RUnlock()
 	
 	// If not preloaded, search the file
-	if !db.preloaded {
-		if entry := db.searchFile(mac); entry != nil {
-			return entry
-		}
+	if entry := db.searchFile(mac); entry != nil {
+		return entry
 	}
 	
-	return db.cache["UNKNOWN"]
+	// Return unknown if nothing found
+	db.mu.RLock()
+	unknown := db.cache["UNKNOWN"]
+	db.mu.RUnlock()
+	return unknown
 }
 
 // searchFile searches the database file for a MAC prefix
@@ -140,7 +165,7 @@ func (db *Database) searchFile(mac string) *models.OUIEntry {
 		
 		prefix := strings.ToUpper(entry.OUI)
 		if strings.HasPrefix(mac, prefix) {
-			// Cache the result
+			// Cache the result with write lock
 			db.mu.Lock()
 			db.cache[prefix] = &entry
 			db.mu.Unlock()
@@ -158,4 +183,3 @@ func (db *Database) Close() error {
 	}
 	return nil
 }
-

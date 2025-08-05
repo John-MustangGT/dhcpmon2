@@ -3,6 +3,7 @@ package monitor
 
 import (
 	"fmt"
+	"path/filepath"
 	"log"
 	"os"
 	"net"
@@ -49,52 +50,136 @@ func New(cfg *config.Config, dhcpParser *dhcp.Parser) *Monitor {
 }
 
 // Start begins monitoring files
+// Fixed version of Monitor.Start() method
+// Replace in internal/monitor/monitor.go
+
 func (m *Monitor) Start() error {
 	var err error
 	m.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create file watcher: %w", err)
 	}
-	
-	// Initial load
+
+	// Initial load (with better error handling)
 	if err := m.loadDHCPLeases(); err != nil {
 		log.Printf("Warning: failed to load DHCP leases: %v", err)
 	}
-	
+
 	if err := m.loadHostEntries(); err != nil {
 		log.Printf("Warning: failed to load host entries: %v", err)
 	}
-	
+
 	// Load static entries
 	if err := m.staticManager.Load(); err != nil {
 		log.Printf("Warning: failed to load static entries: %v", err)
 	}
-	
-	// Start file watching
+
+	// Start file watching goroutine BEFORE adding files
 	go m.watchFiles()
-	
-	// Add files to watcher
-	if err := m.watcher.Add(m.cfg.LeasesFile); err != nil {
-		log.Printf("Warning: failed to watch leases file: %v", err)
-	}
-	
-	if err := m.watcher.Add(m.cfg.HostsFile); err != nil {
-		log.Printf("Warning: failed to watch hosts file: %v", err)
-	}
-	
-	// Watch static file if it exists
+
+	// Add files to watcher with existence checks
+	m.addFileToWatcher(m.cfg.LeasesFile, "leases file")
+	m.addFileToWatcher(m.cfg.HostsFile, "hosts file")
+
 	if m.cfg.StaticFile != "" {
-		if err := m.watcher.Add(m.cfg.StaticFile); err != nil {
-			log.Printf("Warning: failed to watch static file: %v", err)
-		}
+		m.addFileToWatcher(m.cfg.StaticFile, "static file")
 	}
-	
+
 	// Start log manager
 	if err := m.logManager.Start(); err != nil {
 		log.Printf("Warning: failed to start log manager: %v", err)
 	}
-	
+
 	return nil
+}
+
+// Helper method to safely add files to watcher
+func (m *Monitor) addFileToWatcher(filePath, description string) {
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		log.Printf("Warning: %s does not exist: %s", description, filePath)
+
+		// Try to create parent directory and empty file
+		if err := m.ensureFileExists(filePath); err != nil {
+			log.Printf("Warning: could not create %s: %v", description, err)
+			return
+		}
+	}
+
+	// Add to watcher
+	if err := m.watcher.Add(filePath); err != nil {
+		log.Printf("Warning: failed to watch %s (%s): %v", description, filePath, err)
+	} else {
+	}
+}
+
+// Helper to ensure file exists for watching
+func (m *Monitor) ensureFileExists(filePath string) error {
+	// Create parent directory if it doesn't exist
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+
+	// Create empty file if it doesn't exist
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		file, err := os.Create(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to create file %s: %w", filePath, err)
+		}
+		file.Close()
+		log.Printf("Created empty file: %s", filePath)
+	}
+
+	return nil
+}
+
+// Fixed watchFiles method with better error handling
+func (m *Monitor) watchFiles() {
+
+	for {
+		select {
+		case event, ok := <-m.watcher.Events:
+			if !ok {
+				return
+			}
+
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				log.Printf("File modified: %s", event.Name)
+
+				// Use absolute paths for comparison
+				absEventPath, _ := filepath.Abs(event.Name)
+				absLeasesPath, _ := filepath.Abs(m.cfg.LeasesFile)
+				absHostsPath, _ := filepath.Abs(m.cfg.HostsFile)
+				absStaticPath, _ := filepath.Abs(m.cfg.StaticFile)
+
+				switch absEventPath {
+				case absLeasesPath:
+					if err := m.loadDHCPLeases(); err != nil {
+						log.Printf("Error reloading DHCP leases: %v", err)
+					}
+				case absHostsPath:
+					if err := m.loadHostEntries(); err != nil {
+						log.Printf("Error reloading host entries: %v", err)
+					}
+				case absStaticPath:
+					if err := m.staticManager.Load(); err != nil {
+						log.Printf("Error reloading static entries: %v", err)
+					}
+				}
+			}
+
+		case err, ok := <-m.watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("File watcher error: %v", err)
+
+		case <-m.stopCh:
+			return
+		}
+	}
 }
 
 // Stop stops monitoring
@@ -224,6 +309,7 @@ func (m *Monitor) loadDHCPLeases() error {
 		return fmt.Errorf("failed to parse leases: %w", err)
 	}
 	
+
 	m.mu.Lock()
 	m.dhcpLeases = leases
 	m.mu.Unlock()
@@ -250,46 +336,6 @@ func (m *Monitor) loadHostEntries() error {
 	
 	log.Printf("Loaded %d host entries", len(entries))
 	return nil
-}
-
-// watchFiles monitors file changes
-func (m *Monitor) watchFiles() {
-	for {
-		select {
-		case event, ok := <-m.watcher.Events:
-			if !ok {
-				return
-			}
-			
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				log.Printf("File modified: %s", event.Name)
-				
-				switch event.Name {
-				case m.cfg.LeasesFile:
-					if err := m.loadDHCPLeases(); err != nil {
-						log.Printf("Error reloading DHCP leases: %v", err)
-					}
-				case m.cfg.HostsFile:
-					if err := m.loadHostEntries(); err != nil {
-						log.Printf("Error reloading host entries: %v", err)
-					}
-				case m.cfg.StaticFile:
-					if err := m.staticManager.Load(); err != nil {
-						log.Printf("Error reloading static entries: %v", err)
-					}
-				}
-			}
-			
-		case err, ok := <-m.watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Printf("File watcher error: %v", err)
-			
-		case <-m.stopCh:
-			return
-		}
-	}
 }
 
 
